@@ -1,0 +1,2004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EasyLEDMap</title>
+<meta name="description" content="Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.">
+<meta name="theme-color" content="#1d2327">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyMjI4MmIiLz48cGF0aCBkPSJNMTggMjBoMjh2MjRIMTgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVkNjk2MyIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTgiIGN5PSIyMCIgcj0iNyIgZmlsbD0iI2ZmNGZhMyIvPjxjaXJjbGUgY3g9IjQ2IiBjeT0iMjAiIHI9IjciIGZpbGw9IiMxOWMzZTYiLz48Y2lyY2xlIGN4PSI0NiIgY3k9IjQ0IiByPSI3IiBmaWxsPSIjZmZiMDAwIi8+PGNpcmNsZSBjeD0iMTgiIGN5PSI0NCIgcj0iNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOWFhNmEwIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4K">
+<style>
+/* EasyLEDMap. System fonts only so the tool works with no network. */
+:root {
+  --paper: #eef0ec; --panel: #f8f9f6; --ink: #18211d; --muted: #5d6963; --rule: #ced4cc;
+  --accent: #0e6a5b; --accent-ink: #ffffff; --accent-soft: #d9ebe6; --stage: #22282b; --stage-ink: #e8ece9;
+  --danger: #b3261e; --warn-bg: #fff4d6; --warn-ink: #5c4300; --field: #ffffff;
+  --r: 6px; --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #171c1e; --panel: #1e2427; --ink: #e6ebe8; --muted: #9aa6a0; --rule: #333c40; --accent: #3fbfa6; --accent-ink: #062019; --accent-soft: #1d3a34; --stage: #111517; --field: #151a1c; --warn-bg: #3a2f10; --warn-ink: #f3dc9a; --danger: #ff8a80; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font: 14px/1.4 var(--font); color: var(--ink); background: var(--paper); display: flex; flex-direction: column; overflow: hidden; -webkit-text-size-adjust: 100%; }
+button, input, select { font: inherit; color: inherit; }
+h1, h2, p { margin: 0; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--rule); background: var(--panel); flex: none; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+.brand-mark { display: grid; grid-template-columns: repeat(2, 7px); gap: 3px; }
+.brand-mark i { width: 7px; height: 7px; border-radius: 50%; background: #ff4fa3; }
+.brand-mark i:nth-child(2) { background: #19c3e6; } .brand-mark i:nth-child(3) { background: #ffb000; } .brand-mark i:nth-child(4) { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.project-name { flex: 0 1 260px; min-width: 80px; border: 1px solid transparent; background: transparent; padding: 5px 8px; border-radius: var(--r); font-weight: 600; }
+.project-name:hover, .project-name:focus { border-color: var(--rule); background: var(--field); }
+.save-state { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 0; min-width: 0; }
+.bar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.sep { width: 1px; height: 20px; background: var(--rule); margin: 0 4px; }
+
+.btn { border: 1px solid var(--rule); background: var(--field); padding: 6px 12px; border-radius: var(--r); cursor: pointer; white-space: nowrap; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.ghost:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+.btn.tiny { padding: 3px 8px; font-size: 12.5px; }
+.btn.big { padding: 10px 18px; font-size: 15px; }
+.btn.danger { color: var(--danger); }
+
+.work { flex: 1; display: grid; grid-template-columns: 68px minmax(0, 1fr) 320px; min-height: 0; }
+.rail { display: flex; flex-direction: column; gap: 4px; padding: 8px 6px; border-right: 1px solid var(--rule); background: var(--panel); overflow-y: auto; }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px; border: 1px solid transparent; border-radius: var(--r); background: transparent; cursor: pointer; font-size: 11px; line-height: 1.15; text-align: center; color: var(--muted); }
+.tool svg { width: 22px; height: 22px; fill: currentColor; }
+.tool:hover { background: var(--accent-soft); color: var(--ink); }
+.tool.on { background: var(--accent); color: var(--accent-ink); }
+.tool.small { padding: 5px 2px; font-size: 13px; color: var(--ink); border-color: var(--rule); }
+.rail-gap { flex: 1; min-height: 8px; }
+
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--stage); }
+.tabs { display: flex; gap: 2px; padding: 6px 8px 0; background: var(--stage); overflow-x: auto; flex: none; scrollbar-width: thin; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--r) var(--r) 0 0; background: transparent; color: #aab4af; border: 1px solid transparent; border-bottom: 0; cursor: pointer; white-space: nowrap; font-size: 13px; }
+.tab:hover { color: #fff; }
+.tab.on { background: #343c40; color: #fff; border-color: #485257; }
+.tab .n { font-variant-numeric: tabular-nums; opacity: 0.7; font-size: 12px; }
+.tab.add { color: #7fd6c4; }
+.tab.layout { margin-left: auto; }
+.tab input { background: #1a1f22; color: #fff; border: 1px solid #5a666b; border-radius: 4px; padding: 1px 4px; width: 130px; }
+.canvas-wrap { position: relative; flex: 1; min-height: 0; border-top: 1px solid #485257; }
+#canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline-offset: -2px; }
+.hint { position: absolute; left: 10px; right: 10px; bottom: 10px; pointer-events: none; display: flex; justify-content: center; }
+.hint > span { background: rgba(16, 20, 22, 0.88); color: #f1f4f2; padding: 7px 12px; border-radius: 999px; font-size: 13px; max-width: 100%; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset; }
+.hint kbd { font: 12px var(--mono); background: rgba(255, 255, 255, 0.14); border-radius: 4px; padding: 0 4px; }
+.viewopts, .pathopts { position: absolute; top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: rgba(16, 20, 22, 0.86); color: #e8ece9; padding: 5px 10px; border-radius: var(--r); font-size: 12.5px; }
+.viewopts { right: 8px; } .pathopts { left: 8px; max-width: calc(100% - 16px); }
+.viewopts label, .pathopts label { display: flex; align-items: center; gap: 5px; }
+.viewopts select { background: #2b3236; color: #fff; border: 1px solid #4d585d; border-radius: 4px; padding: 1px 4px; }
+.viewopts input[type=range] { width: 70px; accent-color: #7fd6c4; }
+.pathopts .btn { background: #2b3236; color: #fff; border-color: #4d585d; }
+.pathopts .btn.primary { background: #3fbfa6; color: #062019; border-color: #3fbfa6; }
+.pathopts .leg { font-variant-numeric: tabular-nums; color: #ffd98a; min-width: 0; }
+.pathopts:not([hidden]) ~ .viewopts { top: auto; bottom: 48px; }
+
+.empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; background: var(--stage); }
+.empty.drag { background: #1d3a34; }
+.empty-card { max-width: 520px; color: var(--stage-ink); }
+.empty-card h1 { font-size: 28px; line-height: 1.15; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.01em; }
+.empty-card p { color: #b9c3be; font-size: 15px; }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 14px; }
+.empty .btn:not(.primary) { background: transparent; color: #fff; border-color: #5a666b; }
+.empty .btn.primary { background: #3fbfa6; border-color: #3fbfa6; color: #062019; }
+.fine { font-size: 12.5px !important; color: var(--muted); }
+.empty .fine { color: #8f9b95; }
+
+.side { border-left: 1px solid var(--rule); background: var(--panel); overflow-y: auto; min-height: 0; }
+.sec { border-bottom: 1px solid var(--rule); }
+.sec > summary { padding: 9px 12px; font-weight: 650; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
+.sec > summary::-webkit-details-marker { display: none; }
+.sec > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform 0.12s; }
+.sec[open] > summary::before { transform: rotate(45deg); }
+.count { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12.5px; margin-left: auto; }
+.form { padding: 2px 12px 12px; display: grid; gap: 8px; }
+.form.pad { padding: 12px 16px 16px; }
+.form label { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.form label.check { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 13px; }
+.form input:not([type=checkbox]):not([type=range]), .form select { width: 100%; border: 1px solid var(--rule); border-radius: var(--r); padding: 5px 8px; background: var(--field); color: var(--ink); min-width: 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.unit { position: relative; display: block; }
+.unit::after { content: attr(data-u); position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px; pointer-events: none; }
+.unit input { padding-right: 30px !important; }
+.power { font-size: 12.5px; color: var(--ink); background: var(--accent-soft); border-radius: var(--r); padding: 8px 10px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.power b { font-weight: 650; }
+.power .fine { color: var(--muted); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.sec-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 12px; }
+.form .sec-actions { padding: 4px 0 0; }
+.note { font-size: 12.5px; color: var(--muted); }
+.note.warn { background: var(--warn-bg); color: var(--warn-ink); padding: 6px 8px; border-radius: var(--r); }
+
+.list { display: grid; gap: 2px; padding: 0 6px 8px; }
+.list.groups { max-height: 260px; overflow-y: auto; }
+.item { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--r); border: 1px solid transparent; }
+.item:hover { background: var(--accent-soft); }
+.item.on { border-color: var(--accent); background: var(--accent-soft); }
+.item .dot { width: 12px; height: 12px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; }
+.item .name { border: 1px solid transparent; background: transparent; padding: 2px 4px; border-radius: 4px; min-width: 0; width: 100%; font-weight: 550; }
+.item .name:hover, .item .name:focus { border-color: var(--rule); background: var(--field); }
+.item .meta { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.item .pin { width: 44px; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 4px; background: var(--field); text-align: right; }
+.icon { border: 0; background: transparent; cursor: pointer; padding: 2px 5px; border-radius: 4px; color: var(--muted); font-size: 13px; line-height: 1; }
+.icon:hover { background: var(--rule); color: var(--ink); }
+.strip-more { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); }
+.empty-note { padding: 2px 12px 12px; color: var(--muted); font-size: 12.5px; }
+
+.dlg { border: 1px solid var(--rule); border-radius: 10px; padding: 0; background: var(--panel); color: var(--ink); width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+.dlg.wide { width: min(1080px, calc(100vw - 24px)); height: min(760px, calc(100vh - 24px)); }
+.dlg::backdrop { background: rgba(10, 14, 16, 0.55); }
+.dlg[open] { display: flex; flex-direction: column; }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--rule); flex: none; }
+.dlg-head h2 { font-size: 17px; }
+.export { display: grid; grid-template-columns: 330px minmax(0, 1fr); min-height: 0; flex: 1; }
+.export-opts { border-right: 1px solid var(--rule); overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; margin: 0 12px; border: 1px solid var(--rule); border-radius: var(--r); overflow: hidden; }
+.seg button { border: 0; background: var(--field); padding: 7px 4px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.warn-list { display: grid; gap: 6px; padding: 0 12px; }
+.export-go { padding: 0 12px; display: grid; gap: 6px; }
+.export-files { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.file-tabs { display: flex; gap: 4px; padding: 10px 12px 0; overflow-x: auto; flex: none; }
+.file-tabs button { border: 1px solid var(--rule); border-bottom: 0; background: transparent; padding: 5px 9px; border-radius: var(--r) var(--r) 0 0; cursor: pointer; font: 12.5px var(--mono); white-space: nowrap; color: var(--muted); }
+.file-tabs button.on { background: var(--field); color: var(--ink); }
+.preview { flex: 1; margin: 0 12px; border: 1px solid var(--rule); background: var(--field); overflow: auto; padding: 10px 12px; font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; min-height: 120px; border-radius: 0 var(--r) var(--r) var(--r); }
+.preview img { max-width: 100%; height: auto; display: block; background: #000; }
+.file-actions { display: flex; gap: 6px; padding: 10px 12px 12px; flex: none; }
+
+.toast { position: fixed; left: 50%; bottom: 64px; transform: translate(-50%, 20px); background: #101416; color: #fff; padding: 9px 14px; border-radius: var(--r); opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s; max-width: calc(100vw - 32px); z-index: 50; font-size: 13.5px; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast button { margin-left: 10px; background: transparent; color: #7fd6c4; border: 0; cursor: pointer; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+@media (max-width: 860px) {
+  .work { grid-template-columns: 54px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
+  .side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); }
+  .rail { padding: 6px 4px; } .tool span { font-size: 10px; }
+  .bar { flex-wrap: wrap; gap: 6px 8px; padding: 6px 8px; } .save-state { display: none; }
+  .project-name { flex: 1 1 120px; }
+  .bar-actions { gap: 2px; margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; } .bar-actions .sep { display: none; } .btn { padding: 6px 9px; }
+  .viewopts, .pathopts { font-size: 12px; gap: 6px; padding: 4px 6px; } .viewopts input[type=range] { width: 50px; }
+  .export { grid-template-columns: 1fr; grid-template-rows: auto minmax(200px, 1fr); overflow-y: auto; }
+  .export-opts { border-right: 0; border-bottom: 1px solid var(--rule); overflow: visible; }
+  .empty-card h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand" aria-label="EasyLEDMap"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>EasyLEDMap</span></div>
+  <input id="projectName" class="project-name" aria-label="Project name" spellcheck="false" value="Untitled map">
+  <span id="saveState" class="save-state" aria-live="polite"></span>
+  <div class="bar-actions">
+    <button id="btnUndo" class="btn ghost" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button id="btnRedo" class="btn ghost" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+    <span class="sep"></span>
+    <button id="btnNew" class="btn ghost">New</button>
+    <button id="btnOpen" class="btn ghost">Open</button>
+    <button id="btnSave" class="btn">Save project</button>
+    <button id="btnExport" class="btn primary">Export</button>
+  </div>
+</header>
+
+<main class="work">
+  <nav class="rail" aria-label="Tools">
+    <button class="tool" data-tool="select" title="Select and move LEDs (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2 4 7-3 1.5-4-7-5 4z"/></svg><span>Select</span></button>
+    <button class="tool" data-tool="path" title="Draw the path the data takes (P)"><svg viewBox="0 0 24 24"><path d="M4 18h9V7h7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="18" r="2.5"/><circle cx="13" cy="18" r="2.5"/><circle cx="13" cy="7" r="2.5"/><circle cx="20" cy="7" r="2.5"/></svg><span>Draw path</span></button>
+    <button class="tool" data-tool="add" title="Add single LEDs (A)"><svg viewBox="0 0 24 24"><circle cx="10" cy="14" r="6"/><path d="M19 2v8M15 6h8" stroke="currentColor" stroke-width="2"/></svg><span>Add LED</span></button>
+    <button class="tool" data-tool="pan" title="Pan (H, or hold Space)"><svg viewBox="0 0 24 24"><path d="M12 2l3 4h-2v5h5V9l4 3-4 3v-2h-5v5h2l-3 4-3-4h2v-5H6v2l-4-3 4-3v2h5V6H9z"/></svg><span>Pan</span></button>
+    <span class="rail-gap"></span>
+    <button class="tool small" id="btnFit" title="Fit to window (F)"><span>Fit</span></button>
+    <button class="tool small" id="btnZoomIn" title="Zoom in (+)"><span>+</span></button>
+    <button class="tool small" id="btnZoomOut" title="Zoom out (-)"><span>&minus;</span></button>
+  </nav>
+
+  <section class="stage">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="canvas" tabindex="0" aria-label="Mapping view"></canvas>
+      <div class="empty" id="empty">
+        <div class="empty-card">
+          <h1>Map your LEDs from a photo</h1>
+          <p>Add a photo of the strips, then trace the path the data takes. EasyLEDMap counts and places the pixels along it and writes the map for WLED, FastLED or TouchDesigner.</p>
+          <div class="empty-actions">
+            <button class="btn primary big" id="btnAddFirst">Add photos</button>
+            <button class="btn big" id="btnOpen2">Open a project</button>
+          </div>
+          <p class="fine">You can also drop photos or a .ledmap file anywhere on this page. Nothing is uploaded: everything stays on this computer.</p>
+        </div>
+      </div>
+      <div class="pathopts" id="pathOpts" hidden>
+        <label title="Legs alternate: a row of live pixels, then a turn whose in-between pixels are dead"><input type="checkbox" id="optRowsTurns" checked> Rows and turns</label>
+        <label title="When you finish, each row becomes its own group"><input type="checkbox" id="optGroupRows" checked> Group each row</label>
+        <span class="leg" id="legInfo"></span>
+        <button class="btn tiny" id="btnLegMinus" title="One fewer LED on the last leg ([)">&minus;1</button>
+        <button class="btn tiny" id="btnLegPlus" title="One more LED on the last leg (])">+1</button>
+        <button class="btn tiny" id="btnLegType" title="Switch the last leg between row and turn (T)">Row / turn</button>
+        <button class="btn tiny" id="btnLegJump" title="The last click was a wire jump: no LEDs between the two points (J)">Wire jump</button>
+        <button class="btn tiny" id="btnLegUndo" title="Remove the last leg (Backspace)">Remove leg</button>
+        <button class="btn tiny primary" id="btnPathDone" title="Finish (Enter)">Finish</button>
+      </div>
+      <div class="viewopts" id="viewOpts">
+        <label title="Dim the photo so the map reads clearly">Photo <input type="range" id="photoDim" min="0" max="100" value="100"></label>
+        <label>Colour by <select id="colorBy"><option value="strip">Strip</option><option value="group">Group</option></select></label>
+        <label><input type="checkbox" id="showLabels" checked> Numbers</label>
+      </div>
+      <div class="hint" id="hint" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <aside class="side" id="side">
+    <details class="sec" id="secSetup" open>
+      <summary>Setup</summary>
+      <div class="form">
+        <label>LED chipset<select id="fChipset"></select></label>
+        <div class="row2">
+          <label>Voltage<span class="unit" data-u="V"><input id="fVoltage" type="number" min="1" step="0.1" inputmode="decimal"></span></label>
+          <label>Current per pixel<span class="unit" data-u="mA"><input id="fMa" type="number" min="0" step="1" inputmode="decimal"></span></label>
+        </div>
+        <div class="row2">
+          <label>Colour order<select id="fOrder"><option>GRB</option><option>RGB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select></label>
+          <label>LEDs per metre<input id="fLpm" type="number" min="1" step="1" inputmode="numeric"></label>
+        </div>
+        <label>Power supply, if chosen<span class="unit" data-u="A"><input id="fPsu" type="number" min="0" step="0.5" inputmode="decimal" placeholder="optional"></span></label>
+        <div class="power" id="powerBox"></div>
+      </div>
+    </details>
+
+    <details class="sec" id="secPhoto" open>
+      <summary>This photo</summary>
+      <div class="form" id="photoForm"></div>
+    </details>
+
+    <details class="sec" id="secStrips" open>
+      <summary>Strips <span class="count" id="stripCount"></span></summary>
+      <div id="stripList" class="list"></div>
+      <div class="sec-actions"><button class="btn tiny" id="btnAddStrip">Add strip</button></div>
+    </details>
+
+    <details class="sec" id="secSel" open>
+      <summary>Selection <span class="count" id="selCount"></span></summary>
+      <div id="selBox" class="form"></div>
+    </details>
+
+    <details class="sec" id="secGroups" open>
+      <summary>Groups <span class="count" id="groupCount"></span></summary>
+      <div id="groupList" class="list groups"></div>
+      <div class="sec-actions">
+        <button class="btn tiny" id="btnGroupRuns" title="Make one group from every unbroken run of live pixels on the active strip">Group each run</button>
+        <button class="btn tiny" id="btnClearGroups">Clear groups</button>
+      </div>
+    </details>
+  </aside>
+</main>
+
+<dialog id="dlgExport" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h2>Export</h2><button class="btn ghost" value="close" aria-label="Close">Close</button></form>
+  <div class="export">
+    <div class="export-opts">
+      <div class="seg" id="exportTarget" role="tablist">
+        <button data-t="wled" class="on">WLED</button><button data-t="fastled">FastLED</button><button data-t="td">TouchDesigner</button>
+      </div>
+      <div id="exportForm" class="form"></div>
+      <div id="exportWarn" class="warn-list"></div>
+      <div class="export-go">
+        <button class="btn primary" id="btnDownloadAll">Download all as zip</button>
+        <span class="fine" id="exportSummary"></span>
+      </div>
+    </div>
+    <div class="export-files">
+      <div class="file-tabs" id="fileTabs"></div>
+      <pre id="filePreview" class="preview" tabindex="0"></pre>
+      <div class="file-actions"><button class="btn tiny" id="btnCopyFile">Copy</button><button class="btn tiny" id="btnDownloadFile">Download this file</button></div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileImages" accept="image/*" multiple hidden>
+<input type="file" id="fileProject" accept=".ledmap,.zip,.json,application/zip,application/json" hidden>
+
+<script>
+/* EasyLEDMap: geometry helpers (homography, similarity). */
+(function (root) {
+  'use strict';
+  /** Solve A x = b for small dense systems (Gaussian elimination with pivoting). */
+  function solve(A, b) {
+    const n = b.length, M = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      if (Math.abs(M[p][c]) < 1e-12) return null;
+      [M[c], M[p]] = [M[p], M[c]];
+      for (let r = 0; r < n; r++) if (r !== c) {
+        const f = M[r][c] / M[c][c];
+        for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+      }
+    }
+    return M.map((r, i) => r[n] / r[i]);
+  }
+  /** Homography mapping 4 source points to 4 destination points. Returns 9 numbers (row major). */
+  function homography(src, dst) {
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = src[i], [u, v] = dst[i];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+    }
+    const h = solve(A, b);
+    return h ? h.concat([1]) : null;
+  }
+  function applyH(H, x, y) {
+    const w = H[6] * x + H[7] * y + H[8];
+    return [(H[0] * x + H[1] * y + H[2]) / w, (H[3] * x + H[4] * y + H[5]) / w];
+  }
+  function invertH(H) {
+    const [a, b, c, d, e, f, g, h, i] = H;
+    const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+    const det = a * A + b * B + c * C;
+    if (Math.abs(det) < 1e-14) return null;
+    return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map(v => v / det);
+  }
+  const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  /** Sheet transform: photo pixels -> world. flat (optional) rectifies, place moves/rotates/scales. */
+  function sheetMatrix(sheet) {
+    let H = IDENT;
+    if (sheet.flat && sheet.flat.quad) {
+      const { quad, w, h } = sheet.flat;
+      H = homography(quad, [[0, 0], [w, 0], [w, h], [0, h]]) || IDENT;
+    }
+    const p = sheet.place || { x: 0, y: 0, rot: 0, scale: 1 };
+    const s = p.scale || 1, cs = Math.cos(p.rot || 0) * s, sn = Math.sin(p.rot || 0) * s;
+    const P = [cs, -sn, p.x || 0, sn, cs, p.y || 0, 0, 0, 1];
+    return mul(P, H);
+  }
+  function mul(A, B) {
+    const o = new Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+      o[r * 3 + c] = A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c];
+    return o;
+  }
+  const api = { solve, homography, applyH, invertH, sheetMatrix, mul, IDENT };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.LM = root.LM || {}; root.LM.geom = api;
+})(typeof self !== 'undefined' ? self : globalThis);
+</script>
+<script>
+/* EasyLEDMap: project model. Pure functions, no DOM. */
+(function (root) {
+  'use strict';
+  const G = (typeof require !== 'undefined' && typeof module !== 'undefined') ? require('./geom.js') : root.LM.geom;
+
+  /* mA is full-white draw per pixel. Editable in Setup; these only pre-fill the field. */
+  const CHIPSETS = {
+    WS2812B: { label: 'WS2812B', voltage: 5, ma: 55, order: 'GRB', fastled: 'WS2812B', wled: 'WS281x', white: false },
+    WS2813: { label: 'WS2813', voltage: 5, ma: 55, order: 'GRB', fastled: 'WS2813', wled: 'WS281x', white: false },
+    WS2815: { label: 'WS2815', voltage: 12, ma: 12, order: 'GRB', fastled: 'WS2815', wled: 'WS281x', white: false },
+    WS2811: { label: 'WS2811 (12 V, 3 LEDs per pixel)', voltage: 12, ma: 30, order: 'RGB', fastled: 'WS2811', wled: 'WS281x', white: false },
+    SK6812: { label: 'SK6812 RGB', voltage: 5, ma: 55, order: 'GRB', fastled: 'SK6812', wled: 'WS281x', white: false },
+    SK6812W: { label: 'SK6812 RGBW', voltage: 5, ma: 80, order: 'GRB', fastled: 'SK6812', wled: 'SK6812 RGBW', white: true },
+    OTHER: { label: 'Other', voltage: 5, ma: 60, order: 'GRB', fastled: 'WS2812B', wled: 'WS281x', white: false }
+  };
+  const STRIP_COLORS = ['#ff4fa3', '#19c3e6', '#ffb000', '#8ddc3c', '#b78cff', '#ff7847', '#34d6a8', '#f2e24b'];
+  const GROUP_COLORS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9a6324', '#ffe119', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075'];
+  const DEFAULT_PINS = [16, 4, 2, 12, 13, 14, 15, 17, 18, 19];
+
+  let _id = 0;
+  function uid(prefix) { _id++; return (prefix || 'i') + Date.now().toString(36).slice(-5) + _id.toString(36); }
+
+  function newProject() {
+    return {
+      format: 'easyledmap', version: 1, name: 'Untitled map',
+      setup: { chipset: 'WS2815', voltage: 12, maPerPixel: 12, colorOrder: 'GRB', ledsPerMeter: 60, psuAmps: 0 },
+      sheets: [], strips: [], groups: [],
+      exports: {
+        wled: { order: 'wiring', coordType: 'uint8', origin: 'corner', yUp: false, keepAspect: true, grid: false, gridWidth: 0, includeDeadInBounds: false },
+        fastled: { coordType: 'uint16', origin: 'corner', yUp: false, keepAspect: true, lo: 0, hi: 65535, grid: false, gridWidth: 0, includeDeadInBounds: false },
+        td: { origin: 'center', yUp: true, keepAspect: true, lo: -1, hi: 1, universeSize: 170, stripsStartUniverse: true, firstUniverse: 0, includeDeadInBounds: false }
+      }
+    };
+  }
+  function newSheet(name, w, h, file) {
+    return { id: uid('s'), name, file, w, h, pitch: 0, ledSize: 0, flat: null, place: { x: 0, y: 0, rot: 0, scale: 1 }, anchors: [] };
+  }
+  function newStrip(project) {
+    const n = project.strips.length;
+    return { id: uid('t'), name: 'Strip ' + (n + 1), pin: DEFAULT_PINS[n % DEFAULT_PINS.length], color: STRIP_COLORS[n % STRIP_COLORS.length], leds: [] };
+  }
+  function newLed(sheet, x, y, extra) { return Object.assign({ id: uid('l'), s: sheet, x, y, dead: false }, extra || {}); }
+  function newGroup(project, name) {
+    const n = project.groups.length;
+    return { id: uid('g'), name: name || 'Group ' + (n + 1), color: GROUP_COLORS[n % GROUP_COLORS.length], leds: [] };
+  }
+
+  /** Flatten the project into wiring order with world coordinates and group membership. */
+  function resolve(project) {
+    const mats = {};
+    for (const s of project.sheets) mats[s.id] = G.sheetMatrix(s);
+    const groupOf = new Map();
+    project.groups.forEach((g, gi) => { for (const id of g.leds) { if (!groupOf.has(id)) groupOf.set(id, []); groupOf.get(id).push(gi); } });
+    const leds = [], strips = [];
+    let index = 0;
+    project.strips.forEach((st, si) => {
+      const start = index; let live = 0;
+      st.leds.forEach((l, k) => {
+        const M = mats[l.s] || G.IDENT, p = G.applyH(M, l.x, l.y);
+        if (!l.dead) live++;
+        leds.push({ id: l.id, strip: si, stripIndex: k, index: index++, sheet: l.s, x: p[0], y: p[1], dead: !!l.dead, groups: groupOf.get(l.id) || [] });
+      });
+      strips.push({ id: st.id, name: st.name, pin: st.pin, color: st.color, start, count: st.leds.length, live });
+    });
+    return { leds, strips, total: index, live: leds.filter(l => !l.dead).length };
+  }
+
+  /**
+   * Scale world coordinates into an output range.
+   * opts: origin 'corner' | 'center', yUp, keepAspect, lo, hi, includeDeadInBounds.
+   * Returns { u, v } (0..1, v already flipped for yUp) and { x, y } in [lo, hi], plus bounds.
+   */
+  function normalise(leds, opts) {
+    const o = Object.assign({ origin: 'corner', yUp: false, keepAspect: true, lo: 0, hi: 1, includeDeadInBounds: false }, opts);
+    let src = leds.filter(l => o.includeDeadInBounds || !l.dead);
+    if (!src.length) src = leds;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const l of src) { if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x; if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y; }
+    if (!isFinite(minX)) { minX = minY = 0; maxX = maxY = 1; }
+    const W = Math.max(maxX - minX, 1e-9), H = Math.max(maxY - minY, 1e-9);
+    const sx = o.keepAspect ? 1 / Math.max(W, H) : 1 / W, sy = o.keepAspect ? 1 / Math.max(W, H) : 1 / H;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const n = leds.length, u = new Float64Array(n), v = new Float64Array(n), x = new Float64Array(n), y = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const l = leds[i]; let a, b;
+      if (o.origin === 'center') { a = 0.5 + (l.x - cx) * sx; b = 0.5 + (o.yUp ? -(l.y - cy) : (l.y - cy)) * sy; }
+      else { a = (l.x - minX) * sx; b = (o.yUp ? (maxY - l.y) : (l.y - minY)) * sy; }
+      u[i] = a; v[i] = b; x[i] = o.lo + a * (o.hi - o.lo); y[i] = o.lo + b * (o.hi - o.lo);
+    }
+    return { u, v, x, y, bounds: { minX, minY, maxX, maxY, W, H }, aspect: W / H };
+  }
+
+  const INT_TYPES = {
+    uint8: { c: 'uint8_t', lo: 0, hi: 255 }, int8: { c: 'int8_t', lo: -128, hi: 127 },
+    uint16: { c: 'uint16_t', lo: 0, hi: 65535 }, int16: { c: 'int16_t', lo: -32768, hi: 32767 },
+    float: { c: 'float', lo: -1, hi: 1 }
+  };
+  function castValue(v, type) {
+    if (type === 'float') return Math.round(v * 1e5) / 1e5;
+    const t = INT_TYPES[type]; return Math.max(t.lo, Math.min(t.hi, Math.round(v)));
+  }
+
+  /** Power estimate. Worst case is every pixel at full white. */
+  function power(project) {
+    const r = resolve(project), s = project.setup, ma = +s.maPerPixel || 0, v = +s.voltage || 0;
+    const per = r.strips.map(st => ({ name: st.name, pin: st.pin, count: st.count, live: st.live, ampsAll: st.count * ma / 1000, ampsLive: st.live * ma / 1000 }));
+    const ampsAll = r.total * ma / 1000, ampsLive = r.live * ma / 1000;
+    const injectEvery = v >= 12 ? 300 : (v >= 9 ? 200 : 100);
+    return {
+      total: r.total, live: r.live, ampsAll, ampsLive, wattsAll: ampsAll * v, wattsLive: ampsLive * v,
+      psuAmps: ampsLive / 0.8, psuWatts: ampsLive * v / 0.8, wledLimitMa: Math.round((+s.psuAmps > 0 ? +s.psuAmps * 0.9 : ampsLive) * 1000),
+      per, injectEvery, longRuns: per.filter(p => p.count > injectEvery)
+    };
+  }
+
+  /** Each unbroken run of live LEDs in a strip becomes one group. Returns the new groups. */
+  function groupsFromRuns(project, strip, prefix) {
+    const out = []; let cur = null;
+    for (const l of strip.leds) {
+      if (l.dead) { cur = null; continue; }
+      if (l.brk) cur = null;   // a marked pixel always starts a new group
+      if (!cur) { cur = newGroup({ groups: project.groups.concat(out) }, (prefix || strip.name) + ' ' + (out.length + 1)); out.push(cur); }
+      cur.leds.push(l.id);
+    }
+    return out;
+  }
+
+  function validate(p) {
+    // 'led-mapper' was the format name before the tool was renamed. Those files still open.
+    if (!p || (p.format !== 'easyledmap' && p.format !== 'led-mapper')) throw new Error('This file is not an EasyLEDMap project.');
+    p.format = 'easyledmap';
+    if (p.version > 1) throw new Error('This project was saved by a newer version of EasyLEDMap.');
+    const d = newProject();
+    p.setup = Object.assign(d.setup, p.setup || {});
+    p.sheets = p.sheets || []; p.strips = p.strips || []; p.groups = p.groups || [];
+    p.exports = p.exports || {};
+    for (const k of Object.keys(d.exports)) p.exports[k] = Object.assign(d.exports[k], p.exports[k] || {});
+    for (const s of p.sheets) { s.place = Object.assign({ x: 0, y: 0, rot: 0, scale: 1 }, s.place || {}); s.anchors = s.anchors || []; }
+    return p;
+  }
+
+  const api = { CHIPSETS, STRIP_COLORS, GROUP_COLORS, INT_TYPES, uid, newProject, newSheet, newStrip, newLed, newGroup, resolve, normalise, castValue, power, groupsFromRuns, validate };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.LM = root.LM || {}; root.LM.model = api;
+})(typeof self !== 'undefined' ? self : globalThis);
+</script>
+<script>
+/* EasyLEDMap: image analysis. Plain JS, no dependencies. Runs in the browser and in Node. */
+(function (root) {
+  'use strict';
+
+  /** Build brightness (V = max channel) and chroma (max - min) planes from RGBA. */
+  function prepare(rgba, w, h) {
+    const n = w * h, V = new Uint8Array(n), S = new Uint8Array(n);
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const r = rgba[j], g = rgba[j + 1], b = rgba[j + 2];
+      const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      V[i] = mx; S[i] = mx - mn;
+    }
+    return { w, h, V, S };
+  }
+
+  function bilinear(P, w, h, x, y) {
+    if (x < 0) x = 0; else if (x > w - 1.001) x = w - 1.001;
+    if (y < 0) y = 0; else if (y > h - 1.001) y = h - 1.001;
+    const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * w + x0;
+    return (P[i] * (1 - fx) + P[i + 1] * fx) * (1 - fy) + (P[i + w] * (1 - fx) + P[i + w + 1] * fx) * fy;
+  }
+
+  /* ---------- 1D helpers ---------- */
+  function boxSmooth(a, r) {
+    const n = a.length, out = new Float32Array(n);
+    if (r < 1) { out.set(a); return out; }
+    let s = 0, c = 0;
+    for (let i = 0; i < Math.min(n, r + 1); i++) { s += a[i]; c++; }
+    for (let i = 0; i < n; i++) {
+      out[i] = s / c;
+      const add = i + r + 1, rem = i - r;
+      if (add < n) { s += a[add]; c++; }
+      if (rem >= 0) { s -= a[rem]; c--; }
+    }
+    return out;
+  }
+  function normalise(a, win) {
+    const n = a.length, trend = boxSmooth(a, win), out = new Float32Array(n);
+    let ss = 0;
+    for (let i = 0; i < n; i++) { out[i] = a[i] - trend[i]; ss += out[i] * out[i]; }
+    const sd = Math.sqrt(ss / Math.max(1, n)) || 1;
+    for (let i = 0; i < n; i++) out[i] /= sd;
+    return out;
+  }
+
+  /**
+   * Sample three feature profiles along a polyline: mean brightness, darkest pixel and mean
+   * chroma across a band of half-width `half`. The polyline and `half` are in work space;
+   * `map` (optional) converts work space to photo pixels, so a flattened photo is sampled
+   * evenly in real distance. Sampling density is about one sample per photo pixel.
+   */
+  function profiles(prep, poly, half, map) {
+    const { w, h, V, S } = prep;
+    const img = map ? poly.map(p => map(p[0], p[1])) : poly;
+    let L = 0, Lpx = 0; const segL = [];
+    for (let i = 1; i < poly.length; i++) { const l = Math.hypot(poly[i][0] - poly[i - 1][0], poly[i][1] - poly[i - 1][1]); segL.push(l); L += l; Lpx += Math.hypot(img[i][0] - img[i - 1][0], img[i][1] - img[i - 1][1]); }
+    L = L || 1e-9;
+    const n = Math.max(2, Math.round(Lpx) + 1), spu = (n - 1) / L;
+    const mean = new Float32Array(n), dark = new Float32Array(n), chroma = new Float32Array(n);
+    const hw = Math.max(1, Math.round(half * spu));
+    let seg = 0, acc = 0;
+    for (let i = 0; i < n; i++) {
+      const t = (i / (n - 1)) * L;
+      while (seg < segL.length - 1 && t > acc + segL[seg]) { acc += segL[seg]; seg++; }
+      const a = poly[seg], b = poly[seg + 1], sl = segL[seg] || 1e-9, f = Math.max(0, Math.min(1, (t - acc) / sl));
+      const ux = (b[0] - a[0]) / sl, uy = (b[1] - a[1]) / sl, cx = a[0] + (b[0] - a[0]) * f, cy = a[1] + (b[1] - a[1]) * f;
+      let sv = 0, mn = 255, sc = 0, c = 0;
+      for (let k = -hw; k <= hw; k++) {
+        let x = cx - uy * k / spu, y = cy + ux * k / spu;
+        if (map) { const q = map(x, y); x = q[0]; y = q[1]; }
+        const v = bilinear(V, w, h, x, y); sv += v; if (v < mn) mn = v;
+        sc += bilinear(S, w, h, x, y); c++;
+      }
+      mean[i] = sv / c; dark[i] = mn; chroma[i] = sc / c;
+    }
+    return { L, n, spu, feats: [mean, dark, chroma] };
+  }
+  function polyLength(poly) { let L = 0; for (let i = 1; i < poly.length; i++) L += Math.hypot(poly[i][0] - poly[i - 1][0], poly[i][1] - poly[i - 1][1]); return L; }
+  /** Point at distance t along a polyline. */
+  function polyAt(poly, t) {
+    for (let i = 1; i < poly.length; i++) {
+      const l = Math.hypot(poly[i][0] - poly[i - 1][0], poly[i][1] - poly[i - 1][1]);
+      if (t <= l || i === poly.length - 1) { const f = l ? Math.max(0, Math.min(1, t / l)) : 0; return [poly[i - 1][0] + (poly[i][0] - poly[i - 1][0]) * f, poly[i - 1][1] + (poly[i][1] - poly[i - 1][1]) * f]; }
+      t -= l;
+    }
+    return poly[poly.length - 1].slice();
+  }
+
+  /**
+   * Count the LED intervals along a polyline whose two ends sit on LED centres, by epoch
+   * folding: for each candidate count M the brightness profile is folded at period L/M, and
+   * the right M makes the folded shape sharpest.
+   * Returns { intervals, period, confidence (0..1), weak, scores }.
+   */
+  function countPoly(prep, poly, ledSize, pitchGuess, tol, map) {
+    const L = polyLength(poly);
+    tol = tol || 0.3;
+    const guess = Math.max(1, Math.round(L / pitchGuess));
+    const lo = Math.max(1, Math.ceil(L / (pitchGuess * (1 + tol)))), hi = Math.max(lo, Math.floor(L / (pitchGuess * (1 - tol))));
+    const frac = Math.abs(L / pitchGuess - guess);
+    if (L < pitchGuess * 3.5 || hi === lo) return { intervals: guess, period: L / guess, confidence: frac < 0.2 ? 0.6 : 0.2, weak: frac >= 0.25 };
+    const pr = profiles(prep, poly, ledSize * 0.5, map), spu = pr.spu;
+    const feats = pr.feats.map(f => normalise(boxSmooth(f, Math.max(1, Math.round(ledSize * 0.08 * spu))), Math.max(2, Math.round(pitchGuess * 0.75 * spu))));
+    const n = pr.n, scores = [];
+    let best = -1, bestM = guess, second = -1;
+    for (let M = lo; M <= hi; M++) {
+      const period = (n - 1) / M, bins = Math.max(8, Math.min(48, Math.round(period)));
+      let power = 0;
+      for (const f of feats) {
+        const sum = new Float32Array(bins), cnt = new Float32Array(bins);
+        for (let i = 0; i < n; i++) {
+          const ph = (i / period) % 1; let b = Math.floor(ph * bins); if (b >= bins) b = bins - 1;
+          sum[b] += f[i]; cnt[b]++;
+        }
+        let v = 0, m = 0, k = 0;
+        for (let b = 0; b < bins; b++) if (cnt[b]) { const t = sum[b] / cnt[b]; m += t; v += t * t; k++; }
+        m /= k; power += v / k - m * m;
+      }
+      power /= feats.length;
+      scores.push({ M, power });
+      if (power > best) { second = best; best = power; bestM = M; } else if (power > second) second = power;
+    }
+    const confidence = best > 0 ? Math.max(0, Math.min(1, (best - Math.max(0, second)) / best * 1.6)) * Math.min(1, best / 0.2) : 0;
+    // With only a few periods the fold is easily fooled, so fall back to length over spacing.
+    if (confidence < 0.3 && L < pitchGuess * 6) return { intervals: guess, period: L / guess, confidence: 0.2, weak: true, scores };
+    return { intervals: bestM, period: L / bestM, confidence, weak: false, scores };
+  }
+  function countAlong(prep, ax, ay, bx, by, ledSize, pitchGuess, tol, map) { return countPoly(prep, [[ax, ay], [bx, by]], ledSize, pitchGuess, tol, map); }
+
+  /**
+   * Find lit LEDs: bright blobs. Returns [{ x, y, area }], brightest first.
+   * threshold 0 picks one automatically from the brightness histogram.
+   */
+  function detectLit(prep, opts) {
+    const o = Object.assign({ threshold: 0, minArea: 2, maxArea: 0 }, opts);
+    const { w, h, V } = prep, n = w * h;
+    let thr = o.threshold;
+    if (!thr) {
+      const hist = new Uint32Array(256); for (let i = 0; i < n; i++) hist[V[i]]++;
+      // Otsu split, then keep to the bright side so glow around an LED is not counted.
+      let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+      let wB = 0, sB = 0, best = 0, cut = 200;
+      for (let t = 0; t < 256; t++) {
+        wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break;
+        sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
+        if (v > best) { best = v; cut = t; }
+      }
+      thr = Math.max(150, Math.min(250, Math.round(cut + (255 - cut) * 0.5)));
+    }
+    const seen = new Uint8Array(n), out = [], stack = new Int32Array(n > 4e6 ? 4e6 : n);
+    const maxArea = o.maxArea || Math.max(400, n / 400);
+    for (let i = 0; i < n; i++) {
+      if (seen[i] || V[i] < thr) continue;
+      let sp = 0, area = 0, sx = 0, sy = 0, sw = 0; stack[sp++] = i; seen[i] = 1;
+      while (sp) {
+        const j = stack[--sp], x = j % w, y = (j / w) | 0, wt = V[j] - thr + 1;
+        area++; sx += x * wt; sy += y * wt; sw += wt;
+        if (x > 0 && !seen[j - 1] && V[j - 1] >= thr && sp < stack.length) { seen[j - 1] = 1; stack[sp++] = j - 1; }
+        if (x < w - 1 && !seen[j + 1] && V[j + 1] >= thr && sp < stack.length) { seen[j + 1] = 1; stack[sp++] = j + 1; }
+        if (y > 0 && !seen[j - w] && V[j - w] >= thr && sp < stack.length) { seen[j - w] = 1; stack[sp++] = j - w; }
+        if (y < h - 1 && !seen[j + w] && V[j + w] >= thr && sp < stack.length) { seen[j + w] = 1; stack[sp++] = j + w; }
+      }
+      if (area >= o.minArea && area <= maxArea) out.push({ x: sx / sw, y: sy / sw, area });
+    }
+    // Drop specks far smaller than the typical blob.
+    if (out.length > 8) {
+      const areas = out.map(b => b.area).sort((a, b) => a - b), med = areas[areas.length >> 1];
+      return { threshold: thr, blobs: out.filter(b => b.area >= med * 0.15 && b.area <= med * 8) };
+    }
+    return { threshold: thr, blobs: out };
+  }
+
+  /** Order points by walking to the nearest unvisited neighbour, starting at index `start`. */
+  function orderNearest(pts, start) {
+    const n = pts.length, used = new Uint8Array(n), order = [];
+    let cur = Math.max(0, Math.min(n - 1, start | 0));
+    for (let k = 0; k < n; k++) {
+      used[cur] = 1; order.push(cur);
+      let best = -1, bd = Infinity;
+      for (let j = 0; j < n; j++) if (!used[j]) { const d = (pts[j].x - pts[cur].x) ** 2 + (pts[j].y - pts[cur].y) ** 2; if (d < bd) { bd = d; best = j; } }
+      if (best < 0) break; cur = best;
+    }
+    return order;
+  }
+
+  /**
+   * Order points as serpentine rows. Rows are found along the layout's long axis,
+   * the first row starts nearest to `start`, and direction flips on every row.
+   */
+  function orderSerpentine(pts, start) {
+    const n = pts.length; if (n < 3) return pts.map((_, i) => i);
+    let mx = 0, my = 0; for (const p of pts) { mx += p.x; my += p.y; } mx /= n; my /= n;
+    let sxx = 0, sxy = 0, syy = 0; for (const p of pts) { const dx = p.x - mx, dy = p.y - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+    // Rows run along whichever axis the nearest neighbours line up with.
+    let ang = 0; { let ax = 0, ay = 0;
+      for (let i = 0; i < n; i++) { let bd = Infinity, bj = -1; for (let j = 0; j < n; j++) if (j !== i) { const d = (pts[j].x - pts[i].x) ** 2 + (pts[j].y - pts[i].y) ** 2; if (d < bd) { bd = d; bj = j; } }
+        const a = 2 * Math.atan2(pts[bj].y - pts[i].y, pts[bj].x - pts[i].x); ax += Math.cos(a); ay += Math.sin(a); }
+      ang = Math.atan2(ay, ax) / 2; }
+    const c = Math.cos(-ang), s = Math.sin(-ang);
+    const q = pts.map((p, i) => ({ i, u: (p.x - mx) * c - (p.y - my) * s, v: (p.x - mx) * s + (p.y - my) * c }));
+    q.sort((a, b) => a.v - b.v);
+    const gaps = []; for (let i = 1; i < n; i++) gaps.push(q[i].v - q[i - 1].v);
+    const sorted = gaps.slice().sort((a, b) => a - b), big = sorted[sorted.length - 1];
+    const cut = Math.max(sorted[Math.floor(sorted.length * 0.5)] * 4, big * 0.35, 1e-6);
+    const rows = [[q[0]]]; for (let i = 1; i < n; i++) { if (q[i].v - q[i - 1].v > cut) rows.push([]); rows[rows.length - 1].push(q[i]); }
+    for (const r of rows) r.sort((a, b) => a.u - b.u);
+    const st = q.find(e => e.i === (start | 0)) || q[0];
+    const first = rows[0].includes(st) || Math.abs(st.v - rows[0][0].v) < Math.abs(st.v - rows[rows.length - 1][0].v) ? 0 : rows.length - 1;
+    if (first !== 0) rows.reverse();
+    let flip = Math.abs(st.u - rows[0][0].u) > Math.abs(st.u - rows[0][rows[0].length - 1].u);
+    const order = [];
+    for (const r of rows) { if (flip) r.reverse(); for (const e of r) order.push(e.i); flip = !flip; }
+    return order;
+  }
+
+  const api = { prepare, bilinear, profiles, countAlong, countPoly, polyLength, polyAt, boxSmooth, detectLit, orderNearest, orderSerpentine };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.LM = root.LM || {}; root.LM.detect = Object.assign(root.LM.detect || {}, api);
+})(typeof self !== 'undefined' ? self : globalThis);
+</script>
+<script>
+/* EasyLEDMap: minimal zip reader and writer. Writes stored (uncompressed) entries, which is fine
+   because the bulk of a project is JPEG data. Reads stored and deflated entries. */
+(function (root) {
+  'use strict';
+  let table = null;
+  function crc32(buf) {
+    if (!table) { table = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; } }
+    let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = table[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  /** files: [{ name, data: Uint8Array | string }] -> Uint8Array */
+  function write(files) {
+    const entries = files.map(f => { const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data; return { name: enc.encode(f.name), data, crc: crc32(data) }; });
+    let size = 22; for (const e of entries) size += 30 + e.name.length + e.data.length + 46 + e.name.length;
+    const out = new Uint8Array(size), dv = new DataView(out.buffer); let p = 0; const offsets = [];
+    for (const e of entries) {
+      offsets.push(p);
+      dv.setUint32(p, 0x04034b50, true); dv.setUint16(p + 4, 20, true); dv.setUint16(p + 6, 0x0800, true); dv.setUint16(p + 8, 0, true);
+      dv.setUint16(p + 10, 0, true); dv.setUint16(p + 12, 0x21, true); dv.setUint32(p + 14, e.crc, true);
+      dv.setUint32(p + 18, e.data.length, true); dv.setUint32(p + 22, e.data.length, true); dv.setUint16(p + 26, e.name.length, true); dv.setUint16(p + 28, 0, true);
+      out.set(e.name, p + 30); out.set(e.data, p + 30 + e.name.length); p += 30 + e.name.length + e.data.length;
+    }
+    const cdStart = p;
+    entries.forEach((e, i) => {
+      dv.setUint32(p, 0x02014b50, true); dv.setUint16(p + 4, 20, true); dv.setUint16(p + 6, 20, true); dv.setUint16(p + 8, 0x0800, true); dv.setUint16(p + 10, 0, true);
+      dv.setUint16(p + 12, 0, true); dv.setUint16(p + 14, 0x21, true); dv.setUint32(p + 16, e.crc, true); dv.setUint32(p + 20, e.data.length, true); dv.setUint32(p + 24, e.data.length, true);
+      dv.setUint16(p + 28, e.name.length, true); dv.setUint32(p + 42, offsets[i], true);
+      out.set(e.name, p + 46); p += 46 + e.name.length;
+    });
+    dv.setUint32(p, 0x06054b50, true); dv.setUint16(p + 8, entries.length, true); dv.setUint16(p + 10, entries.length, true);
+    dv.setUint32(p + 12, p - cdStart, true); dv.setUint32(p + 16, cdStart, true);
+    return out;
+  }
+  async function inflateRaw(data) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot open compressed project files. Use a current version of Chrome, Edge, Firefox or Safari.');
+    const ds = new DecompressionStream('deflate-raw');
+    const stream = new Blob([data]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  /** Uint8Array -> Promise<[{ name, data: Uint8Array }]> */
+  async function read(buf) {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let e = buf.length - 22;
+    while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+    if (e < 0) throw new Error('This is not a zip file.');
+    const count = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const out = [];
+    for (let i = 0; i < count; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('The zip file is damaged.');
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = dec.decode(buf.subarray(p + 46, p + 46 + nlen));
+      const ln = dv.getUint16(off + 26, true), lx = dv.getUint16(off + 28, true), start = off + 30 + ln + lx;
+      const raw = buf.subarray(start, start + csize);
+      if (!name.endsWith('/')) out.push({ name, data: method === 0 ? raw.slice() : await inflateRaw(raw) });
+      p += 46 + nlen + xlen + clen;
+    }
+    return out;
+  }
+  const api = { write, read, crc32 };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.LM = root.LM || {}; root.LM.zip = api;
+})(typeof self !== 'undefined' ? self : globalThis);
+</script>
+<script>
+/* EasyLEDMap: exporters. Pure functions: project in, list of files out. */
+(function (root) {
+  'use strict';
+  const node = (typeof require !== 'undefined' && typeof module !== 'undefined');
+  const M = node ? require('./model.js') : root.LM.model;
+  const VERSION = '0.1.0';
+
+  const safe = s => String(s || '').replace(/[^\w\- .]+/g, '_').trim() || 'led_map';
+  const cid = s => String(s || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'x';
+  function cArray(type, name, values, opts) {
+    const o = Object.assign({ perLine: 16, progmem: true, size: '' }, opts);
+    const lines = [];
+    for (let i = 0; i < values.length; i += o.perLine) lines.push('  ' + values.slice(i, i + o.perLine).join(', '));
+    return `const ${type} ${name}[${o.size}]${o.progmem ? ' PROGMEM' : ''} = {\n${lines.join(',\n')}\n};\n`;
+  }
+  const fmt = (v, type) => type === 'float' ? (Number.isInteger(v) ? v.toFixed(1) : String(v)) + 'f' : String(v);
+  function stamp(project) { return `Generated by EasyLEDMap ${VERSION} from "${project.name}"`; }
+
+  /** Median spacing between neighbouring live LEDs on the same strip, in world units. */
+  function medianPitch(leds) {
+    const d = [];
+    for (let i = 1; i < leds.length; i++) {
+      const a = leds[i - 1], b = leds[i];
+      if (a.strip === b.strip) d.push(Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    d.sort((x, y) => x - y);
+    return d.length ? d[d.length >> 1] : 1;
+  }
+
+  /** Snap live LEDs onto a grid for matrix style maps. Returns { w, h, cells (index or -1), dropped }. */
+  function gridMap(res, width, maxSide) {
+    const live = res.leds.filter(l => !l.dead);
+    if (!live.length) return { w: 1, h: 1, cells: [-1], dropped: 0 };
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const l of live) { minX = Math.min(minX, l.x); maxX = Math.max(maxX, l.x); minY = Math.min(minY, l.y); maxY = Math.max(maxY, l.y); }
+    const W = Math.max(maxX - minX, 1e-9), H = Math.max(maxY - minY, 1e-9);
+    let w = width > 1 ? width : Math.round(W / medianPitch(live)) + 1;
+    maxSide = maxSide || 255;
+    let cell = W / Math.max(1, w - 1), h = Math.round(H / cell) + 1;
+    if (w > maxSide || h > maxSide) { const k = Math.max(w, h) / maxSide; w = Math.max(1, Math.floor(w / k)); cell = W / Math.max(1, w - 1); h = Math.min(maxSide, Math.round(H / cell) + 1); }
+    const cells = new Array(w * h).fill(-1); let dropped = 0;
+    for (const l of live) {
+      const gx = (l.x - minX) / cell, gy = (l.y - minY) / cell;
+      let best = -1, bd = Infinity;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const cx = Math.round(gx) + dx, cy = Math.round(gy) + dy;
+        if (cx < 0 || cy < 0 || cx >= w || cy >= h || cells[cy * w + cx] !== -1) continue;
+        const dd = (cx - gx) ** 2 + (cy - gy) ** 2; if (dd < bd) { bd = dd; best = cy * w + cx; }
+      }
+      if (best < 0) dropped++; else cells[best] = l.index;
+    }
+    return { w, h, cells, dropped };
+  }
+
+  /** Group ranges over an ordering. order[k] = LED index at position k. */
+  function groupTables(project, res, posOf) {
+    const out = [];
+    project.groups.forEach((g, gi) => {
+      const ids = new Set(g.leds);
+      const members = res.leds.filter(l => ids.has(l.id) && !l.dead);
+      const pos = members.map(l => posOf[l.index]).filter(p => p >= 0).sort((a, b) => a - b);
+      const contiguous = pos.length > 0 && pos[pos.length - 1] - pos[0] === pos.length - 1;
+      let sx = 0, sy = 0; for (const l of members) { sx += l.x; sy += l.y; }
+      out.push({ gi, name: g.name, count: pos.length, pos, contiguous, start: pos.length ? pos[0] : 0, cx: members.length ? sx / members.length : 0, cy: members.length ? sy / members.length : 0, members });
+    });
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ WLED */
+  function wled(project) {
+    const o = project.exports.wled, s = project.setup, res = M.resolve(project), warnings = [], files = [];
+    const chip = M.CHIPSETS[s.chipset] || M.CHIPSETS.OTHER;
+    const live = res.leds.filter(l => !l.dead);
+    // Virtual order: the pixels effects will see, in the order they will see them.
+    let virt;
+    if (o.order === 'groups' && project.groups.length) {
+      const placed = new Set(); virt = [];
+      for (const g of project.groups) {
+        const ids = new Set(g.leds);
+        for (const l of live) if (ids.has(l.id) && !placed.has(l.index)) { placed.add(l.index); virt.push(l.index); }
+      }
+      for (const l of live) if (!placed.has(l.index)) virt.push(l.index);
+    } else virt = live.map(l => l.index);
+    const posOf = new Array(res.total).fill(-1); virt.forEach((p, k) => { posOf[p] = k; });
+    // Pad to the full physical length with -1 so dead pixels are unmapped on every WLED version.
+    const map = virt.concat(new Array(res.total - virt.length).fill(-1));
+    files.push({ name: 'ledmap.json', text: `{"n":${JSON.stringify(project.name)},"map":[${map.join(',')}]}\n` });
+    if (res.total > 1800) warnings.push(`This map has ${res.total} entries. WLED 0.15 loads the whole file into a fixed JSON buffer, so maps much beyond about 1,800 entries may fail to load on 0.15.x.`);
+
+    const gt = groupTables(project, res, posOf);
+    const nonContig = gt.filter(g => g.count && !g.contiguous);
+    if (nonContig.length) warnings.push(`${nonContig.length} group(s) are not one unbroken run in this pixel order (${nonContig.slice(0, 4).map(g => g.name).join(', ')}${nonContig.length > 4 ? ', …' : ''}). Switch pixel order to "Packed by group" to make every group a single range.`);
+    const multi = res.leds.filter(l => l.groups.length > 1).length;
+    if (multi) warnings.push(`${multi} LED(s) belong to more than one group. LM_GROUP_OF records only the first.`);
+
+    const norm = M.normalise(res.leds, { origin: o.origin, yUp: o.yUp, keepAspect: o.keepAspect, lo: M.INT_TYPES[o.coordType].lo, hi: M.INT_TYPES[o.coordType].hi, includeDeadInBounds: o.includeDeadInBounds });
+    const T = M.INT_TYPES[o.coordType].c, big = project.groups.length > 254, GT = big ? 'uint16_t' : 'uint8_t', none = big ? 65535 : 255;
+    const centroid = (g, axis) => {
+      if (!g.members.length) return 0;
+      let a = 0; for (const l of g.members) a += axis === 'x' ? norm.x[l.index] : norm.y[l.index];
+      return M.castValue(a / g.members.length, o.coordType);
+    };
+    let h = `// ${stamp(project)}\n// Header for WLED custom effects and usermods. Indexes are the mapped (virtual) pixel\n// indexes that effects see once ledmap.json is loaded. Dead pixels are not in the map.\n#pragma once\n#include <stdint.h>\n#ifndef PROGMEM\n#define PROGMEM\n#endif\n\n`;
+    h += `#define LM_NUM_PHYSICAL ${res.total}   // LEDs on the wire, dead pixels included\n#define LM_NUM_PIXELS   ${virt.length}   // mapped pixels (set the segment to 0..${virt.length})\n#define LM_NUM_GROUPS   ${gt.length}\n#define LM_NO_GROUP     ${none}\n\n`;
+    if (gt.length) {
+      h += `// Group g covers mapped pixels LM_GROUP_START[g] .. LM_GROUP_START[g] + LM_GROUP_LEN[g] - 1.\n// A length of 0 means the group is not one unbroken run; use LM_GROUP_OF for those.\n`;
+      h += gt.map((g, i) => `//  ${String(i).padStart(3)}  ${g.name}  (${g.count} px)${g.count && !g.contiguous ? '  NOT CONTIGUOUS' : ''}`).join('\n') + '\n';
+      h += cArray('uint16_t', 'LM_GROUP_START', gt.map(g => g.contiguous ? g.start : 0), { size: 'LM_NUM_GROUPS' });
+      h += cArray('uint16_t', 'LM_GROUP_LEN', gt.map(g => g.contiguous ? g.count : 0), { size: 'LM_NUM_GROUPS' });
+      h += `// Centre of each group, ${T} ${o.coordType === 'float' ? '' : `${M.INT_TYPES[o.coordType].lo}..${M.INT_TYPES[o.coordType].hi}`}, ${o.yUp ? 'Y up' : 'Y down'}.\n`;
+      h += cArray(T, 'LM_GROUP_X', gt.map(g => fmt(centroid(g, 'x'), o.coordType)), { size: 'LM_NUM_GROUPS' });
+      h += cArray(T, 'LM_GROUP_Y', gt.map(g => fmt(centroid(g, 'y'), o.coordType)), { size: 'LM_NUM_GROUPS' });
+      h += `// Group of each mapped pixel, or LM_NO_GROUP.\n`;
+      h += cArray(GT, 'LM_GROUP_OF', virt.map(p => res.leds[p].groups.length ? res.leds[p].groups[0] : none), { size: 'LM_NUM_PIXELS', perLine: 24 });
+    }
+    h += `// Position of each mapped pixel.\n`;
+    h += cArray(T, 'LM_X', virt.map(p => fmt(M.castValue(norm.x[p], o.coordType), o.coordType)), { size: 'LM_NUM_PIXELS' });
+    h += cArray(T, 'LM_Y', virt.map(p => fmt(M.castValue(norm.y[p], o.coordType), o.coordType)), { size: 'LM_NUM_PIXELS' });
+    files.push({ name: 'led_map_wled.h', text: h });
+
+    if (gt.length) files.push({
+      name: 'lm_group_effect_example.h', text:
+`// ${stamp(project)}
+// Example custom effect: every group lights as one pixel.
+// Written against the WLED 0.15.x effect API. Not compiled or run on hardware by the tool:
+// treat it as a starting point. It assumes one segment covering mapped pixels 0..LM_NUM_PIXELS.
+#include "led_map_wled.h"
+
+static uint16_t mode_lm_groups(void) {
+  for (uint16_t g = 0; g < LM_NUM_GROUPS; g++) {
+    uint8_t hue = (uint8_t)((g * 255U) / LM_NUM_GROUPS + (strip.now >> 5));
+    uint32_t c = SEGMENT.color_from_palette(hue, false, true, 0);
+    uint16_t start = pgm_read_word(&LM_GROUP_START[g]);
+    uint16_t len = pgm_read_word(&LM_GROUP_LEN[g]);
+    for (uint16_t i = 0; i < len; i++) SEGMENT.setPixelColor(start + i, c);
+  }
+  return FRAMETIME;
+}
+static const char _data_FX_MODE_LM_GROUPS[] PROGMEM = "Group Pixels@!;;!";
+
+// Register it from a usermod's setup():
+//   strip.addEffect(255, &mode_lm_groups, _data_FX_MODE_LM_GROUPS);
+` });
+
+    if (o.grid) {
+      const g = gridMap(res, +o.gridWidth || 0, 128);
+      files.push({ name: 'ledmap_2d.json', text: `{"n":${JSON.stringify(project.name + ' 2D')},"width":${g.w},"height":${g.h},"map":[${g.cells.join(',')}]}\n` });
+      if (g.dropped) warnings.push(`2D map: ${g.dropped} LED(s) landed on a cell that was already taken and were left out. Use a wider grid.`);
+    }
+
+    // Setup sheet
+    const P = M.power(project);
+    const wiring = o.order !== 'groups' || !project.groups.length;
+    let segs = null;
+    if (wiring) { let a = 0; segs = res.strips.map((st, i) => { const seg = { id: i, start: a, stop: a + st.live, n: st.name }; a += st.live; return seg; }).filter(x => x.stop > x.start); }
+    let t = `# WLED setup for ${project.name}\n\n${stamp(project)}\n\n`;
+    t += `## LED outputs (Config > LED Preferences)\n\n| Output | Name | GPIO | Type | Colour order | Length |\n|---|---|---|---|---|---|\n`;
+    res.strips.forEach((st, i) => { t += `| ${i + 1} | ${st.name} | ${st.pin} | ${chip.wled} | ${s.colorOrder} | ${st.count} |\n`; });
+    t += `\nTotal LEDs: ${res.total} (${res.live} mapped, ${res.total - res.live} dead).\nLengths include dead pixels: they are still on the data line.\n\n`;
+    t += `## Current\n\n- LED voltage: ${s.voltage} V\n- Per pixel at full white: ${s.maPerPixel} mA (set this as the per-LED current in WLED)\n- Mapped pixels at full white: ${P.ampsLive.toFixed(2)} A (${P.wattsLive.toFixed(0)} W)\n- Suggested WLED maximum current: ${P.wledLimitMa} mA${+s.psuAmps > 0 ? ` (90% of your ${s.psuAmps} A supply)` : ' (enter your supply size in Setup to base this on the supply)'}\n\nThese are estimates from the numbers in Setup, not measurements.\n\n`;
+    t += `## Load the map\n\n1. Open http://<controller>/edit and upload ledmap.json.\n2. Reboot, or pick the map under Config > 2D/LED map if your build shows that menu.\n3. Set the main segment to start 0, stop ${virt.length}. Everything past ${virt.length} is a dead pixel and stays dark because the map leaves it unmapped.\n\n`;
+    t += `The map is padded with -1 to the full length (${res.total}). WLED 0.15.x lets pixels past the end of a short map light up directly, and the padding prevents that.\n\n`;
+    if (segs && segs.length > 1) t += `## One segment per strip (optional)\n\nPOST this to http://<controller>/json/state:\n\n\`\`\`json\n${JSON.stringify({ seg: segs })}\n\`\`\`\n\n`;
+    if (gt.length) t += `## Groups\n\n${gt.length} groups are in led_map_wled.h as start and length tables. Stock WLED has no setting that makes ${gt.length} unequal groups each behave as one pixel (segments are capped at 32 on a standard ESP32, and segment grouping only handles equal sizes), so group effects need a custom effect or usermod that reads that header. lm_group_effect_example.h is a starting point.\n\n`;
+    t += `## Before you flash custom firmware\n\nNote the firmware version and build name shown under Info, and keep a USB recovery path. Some controllers need a board-specific build.\n`;
+    files.push({ name: 'wled_setup.md', text: t });
+    return { files, warnings, summary: { total: res.total, live: virt.length, groups: gt.length } };
+  }
+
+  /* --------------------------------------------------------------- FastLED */
+  function fastled(project) {
+    const o = project.exports.fastled, s = project.setup, res = M.resolve(project), warnings = [], files = [];
+    const chip = M.CHIPSETS[s.chipset] || M.CHIPSETS.OTHER, P = M.power(project);
+    const T = M.INT_TYPES[o.coordType], lo = o.coordType === 'float' ? +o.lo : Math.max(T.lo, +o.lo), hi = o.coordType === 'float' ? +o.hi : Math.min(T.hi, +o.hi);
+    const norm = M.normalise(res.leds, { origin: o.origin, yUp: o.yUp, keepAspect: o.keepAspect, lo, hi, includeDeadInBounds: o.includeDeadInBounds });
+    const posOf = res.leds.map(l => l.dead ? -1 : l.index);
+    const gt = groupTables(project, res, posOf);
+    const big = project.groups.length > 254, GT = big ? 'uint16_t' : 'uint8_t', none = big ? 65535 : 255;
+    const rd = o.coordType === 'float' ? 'pgm_read_float' : (o.coordType.endsWith('16') ? 'pgm_read_word' : 'pgm_read_byte');
+    let h = `// ${stamp(project)}\n// Arrays are in data order: entry i belongs to leds[i].\n#pragma once\n#include <FastLED.h>\n\n`;
+    h += `#define LM_NUM_LEDS      ${res.total}\n#define LM_NUM_LIVE      ${res.live}\n#define LM_NUM_STRIPS    ${res.strips.length}\n#define LM_NUM_GROUPS    ${gt.length}\n#define LM_NO_GROUP      ${none}\n#define LM_LED_TYPE      ${chip.fastled}\n#define LM_COLOR_ORDER   ${s.colorOrder.slice(0, 3)}\n#define LM_VOLTS         ${s.voltage}\n#define LM_MAX_MILLIAMPS ${P.wledLimitMa}\n\n`;
+    h += `// Strip ${'#'}: data pin, first index, length\n` + res.strips.map((st, i) => `//  ${i}: GPIO ${st.pin}, ${st.start}, ${st.count}  ${st.name}`).join('\n') + '\n';
+    h += cArray('uint8_t', 'LM_STRIP_PIN', res.strips.map(st => st.pin), { size: 'LM_NUM_STRIPS', progmem: false });
+    h += cArray('uint16_t', 'LM_STRIP_START', res.strips.map(st => st.start), { size: 'LM_NUM_STRIPS', progmem: false });
+    h += cArray('uint16_t', 'LM_STRIP_COUNT', res.strips.map(st => st.count), { size: 'LM_NUM_STRIPS', progmem: false });
+    h += `\n// Position of each LED: ${T.c}, range ${lo}..${hi}, origin ${o.origin === 'center' ? 'centre' : (o.yUp ? 'bottom left' : 'top left')}, ${o.yUp ? 'Y up' : 'Y down'}${o.keepAspect ? ', aspect ratio kept' : ', stretched to fill'}.\n`;
+    h += cArray(T.c, 'LM_X', Array.from(norm.x, v => fmt(M.castValue(v, o.coordType), o.coordType)), { size: 'LM_NUM_LEDS' });
+    h += cArray(T.c, 'LM_Y', Array.from(norm.y, v => fmt(M.castValue(v, o.coordType), o.coordType)), { size: 'LM_NUM_LEDS' });
+    h += `inline ${T.c} lmX(uint16_t i) { return (${T.c})${rd}(&LM_X[i]); }\ninline ${T.c} lmY(uint16_t i) { return (${T.c})${rd}(&LM_Y[i]); }\n\n`;
+    h += `// Group of each LED, or LM_NO_GROUP. Dead pixels have no group.\n`;
+    h += cArray(GT, 'LM_GROUP', res.leds.map(l => (!l.dead && l.groups.length) ? l.groups[0] : none), { size: 'LM_NUM_LEDS', perLine: 24 });
+    h += `inline ${GT} lmGroup(uint16_t i) { return (${GT})${big ? 'pgm_read_word' : 'pgm_read_byte'}(&LM_GROUP[i]); }\n\n`;
+    const bits = new Array(Math.ceil(res.total / 8) || 1).fill(0);
+    res.leds.forEach(l => { if (l.dead) bits[l.index >> 3] |= 1 << (l.index & 7); });
+    h += `// One bit per LED, set when the pixel is dead (on the data line but kept dark).\n`;
+    h += cArray('uint8_t', 'LM_DEAD_BITS', bits.map(b => '0x' + b.toString(16).padStart(2, '0')), { perLine: 20 });
+    h += `inline bool lmIsDead(uint16_t i) { return (pgm_read_byte(&LM_DEAD_BITS[i >> 3]) >> (i & 7)) & 1; }\n\n`;
+    if (gt.length) {
+      h += `// Groups. A length of 0 means the group is not one unbroken run of indexes; use LM_GROUP for those.\n` + gt.map((g, i) => `//  ${String(i).padStart(3)}  ${g.name}  (${g.count} px)`).join('\n') + '\n';
+      h += cArray('uint16_t', 'LM_GROUP_START', gt.map(g => g.contiguous ? g.start : 0), { size: 'LM_NUM_GROUPS' });
+      h += cArray('uint16_t', 'LM_GROUP_LEN', gt.map(g => g.contiguous ? g.count : 0), { size: 'LM_NUM_GROUPS' });
+    }
+    if (o.grid) {
+      const g = gridMap(res, +o.gridWidth || 0, 255);
+      h += `\n// Grid lookup. Cells with no LED return LM_NUM_LEDS, so declare CRGB leds[LM_NUM_LEDS + 1].\n#define LM_GRID_W ${g.w}\n#define LM_GRID_H ${g.h}\n`;
+      h += cArray('uint16_t', 'LM_GRID', g.cells.map(c => c < 0 ? res.total : c), { size: 'LM_GRID_W * LM_GRID_H' });
+      h += `inline uint16_t XY(uint8_t x, uint8_t y) {\n  if (x >= LM_GRID_W || y >= LM_GRID_H) return LM_NUM_LEDS;\n  return pgm_read_word(&LM_GRID[(uint16_t)y * LM_GRID_W + x]);\n}\n`;
+      if (g.dropped) warnings.push(`Grid lookup: ${g.dropped} LED(s) landed on a cell that was already taken and are not reachable through XY(). Use a wider grid.`);
+    }
+    files.push({ name: 'led_map.h', text: h });
+
+    let ino = `// ${stamp(project)}\n// Example sketch. Not compiled or run on hardware by the tool: treat it as a starting point.\n#include <FastLED.h>\n#include "led_map.h"\n\nCRGB leds[LM_NUM_LEDS + 1];   // +1 is a spare pixel for off-grid writes\n\nvoid setup() {\n`;
+    res.strips.forEach(st => { ino += `  FastLED.addLeds<LM_LED_TYPE, ${st.pin}, LM_COLOR_ORDER>(leds, ${st.start}, ${st.count});   // ${st.name}\n`; });
+    ino += `  FastLED.setMaxPowerInVoltsAndMilliamps(LM_VOLTS, LM_MAX_MILLIAMPS);\n}\n\nvoid loop() {\n  uint8_t t = millis() >> 4;\n  for (uint16_t i = 0; i < LM_NUM_LEDS; i++) {\n    if (lmIsDead(i)) { leds[i] = CRGB::Black; continue; }\n`;
+    ino += gt.length ? `    ${GT} g = lmGroup(i);\n    if (g == LM_NO_GROUP) leds[i] = CRGB::Black;\n    else leds[i] = CHSV((uint8_t)(g * 255 / LM_NUM_GROUPS) + t, 255, 255);   // one colour per group\n` : `    leds[i] = CHSV((uint8_t)(lmX(i) >> ${o.coordType.endsWith('16') ? 8 : 0}) + t, 255, 255);   // sweep along X\n`;
+    ino += `  }\n  FastLED.show();\n}\n`;
+    if (o.coordType === 'float' && !gt.length) ino = ino.replace(/\(uint8_t\)\(lmX\(i\) >> 0\)/, '(uint8_t)(lmX(i) * 255)');
+    files.push({ name: 'led_map_example.ino', text: ino });
+    return { files, warnings, summary: { total: res.total, live: res.live, groups: gt.length } };
+  }
+
+  /* --------------------------------------------------------- TouchDesigner */
+  function crc32(buf) {
+    let t = crc32.t;
+    if (!t) { t = crc32.t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } }
+    let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  /** 16 bit RGB PNG, one row. Uses stored deflate blocks so it needs no compressor. */
+  function png16(width, height, rgb16) {
+    const row = 1 + width * 6, raw = new Uint8Array(row * height);
+    for (let y = 0; y < height; y++) {
+      raw[y * row] = 0;
+      for (let x = 0; x < width * 3; x++) { const v = rgb16[y * width * 3 + x]; raw[y * row + 1 + x * 2] = v >> 8; raw[y * row + 2 + x * 2] = v & 255; }
+    }
+    const blocks = Math.ceil(raw.length / 65535) || 1, z = new Uint8Array(2 + raw.length + blocks * 5 + 4);
+    let p = 0; z[p++] = 0x78; z[p++] = 0x01;
+    for (let b = 0; b < blocks; b++) {
+      const s = b * 65535, len = Math.min(65535, raw.length - s);
+      z[p++] = b === blocks - 1 ? 1 : 0; z[p++] = len & 255; z[p++] = len >> 8; z[p++] = ~len & 255; z[p++] = (~len >> 8) & 255;
+      z.set(raw.subarray(s, s + len), p); p += len;
+    }
+    let a = 1, bsum = 0; for (let i = 0; i < raw.length; i++) { a = (a + raw[i]) % 65521; bsum = (bsum + a) % 65521; }
+    z[p++] = bsum >> 8; z[p++] = bsum & 255; z[p++] = a >> 8; z[p++] = a & 255;
+    const chunk = (type, data) => {
+      const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer);
+      dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+      out.set(data, 8); dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length))); return out;
+    };
+    const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
+    dv.setUint32(0, width); dv.setUint32(4, height); ihdr[8] = 16; ihdr[9] = 2;
+    const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', z), chunk('IEND', new Uint8Array(0))];
+    const out = new Uint8Array(parts.reduce((n, x) => n + x.length, 0)); let q = 0; for (const x of parts) { out.set(x, q); q += x.length; }
+    return out;
+  }
+
+  function touchdesigner(project) {
+    const o = project.exports.td, s = project.setup, res = M.resolve(project), warnings = [], files = [];
+    const chip = M.CHIPSETS[s.chipset] || M.CHIPSETS.OTHER, ch = chip.white ? 4 : 3;
+    const norm = M.normalise(res.leds, { origin: o.origin, yUp: o.yUp, keepAspect: o.keepAspect, lo: +o.lo, hi: +o.hi, includeDeadInBounds: o.includeDeadInBounds });
+    const uv = M.normalise(res.leds, { origin: 'corner', yUp: true, keepAspect: false, lo: 0, hi: 1, includeDeadInBounds: o.includeDeadInBounds });
+    const perU = Math.max(1, Math.min(Math.floor(512 / ch), +o.universeSize || Math.floor(512 / ch)));
+    const r5 = v => (Math.round(v * 1e5) / 1e5).toString();
+    const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    let csv = 'index,strip,strip_name,pin,strip_index,x,y,u,v,dead,group,group_name,universe,channel\n';
+    let uni = +o.firstUniverse || 0, inU = 0, lastStrip = -1;
+    for (const l of res.leds) {
+      if (o.stripsStartUniverse && l.strip !== lastStrip && lastStrip !== -1 && inU > 0) { uni++; inU = 0; }
+      if (inU >= perU) { uni++; inU = 0; }
+      lastStrip = l.strip;
+      const g = l.groups.length ? l.groups[0] : -1;
+      csv += [l.index, l.strip, q(res.strips[l.strip].name), res.strips[l.strip].pin, l.stripIndex, r5(norm.x[l.index]), r5(norm.y[l.index]), r5(uv.u[l.index]), r5(uv.v[l.index]), l.dead ? 1 : 0, g, g < 0 ? '' : q(project.groups[g].name), uni, inU * ch + 1].join(',') + '\n';
+      inU++;
+    }
+    files.push({ name: 'led_map.csv', text: csv });
+    const gt = groupTables(project, res, res.leds.map(l => l.dead ? -1 : l.index));
+    if (gt.length) {
+      let g = 'group,name,count,x,y,u,v\n';
+      for (const t of gt) {
+        let x = 0, y = 0, u = 0, v = 0; for (const l of t.members) { x += norm.x[l.index]; y += norm.y[l.index]; u += uv.u[l.index]; v += uv.v[l.index]; }
+        const n = t.members.length || 1;
+        g += [t.gi, q(t.name), t.count, r5(x / n), r5(y / n), r5(u / n), r5(v / n)].join(',') + '\n';
+      }
+      files.push({ name: 'led_groups.csv', text: g });
+    }
+    // UV lookup texture: pixel i holds (u, v) of LED i in red and green. Blue is 65535 for live, 0 for dead.
+    if (res.total > 0) {
+      const tex = new Uint16Array(res.total * 3);
+      res.leds.forEach(l => { const c = t => Math.max(0, Math.min(65535, Math.round(t * 65535))); tex[l.index * 3] = c(uv.u[l.index]); tex[l.index * 3 + 1] = c(uv.v[l.index]); tex[l.index * 3 + 2] = l.dead ? 0 : 65535; });
+      files.push({ name: 'led_uv_16bit.png', bytes: png16(res.total, 1, tex) });
+    }
+    const lastU = uni;
+    files.push({
+      name: 'touchdesigner_notes.md', text:
+`# TouchDesigner files for ${project.name}
+
+${stamp(project)}
+
+- led_map.csv: one row per LED in data order. x and y are in ${o.lo}..${o.hi} (${o.origin === 'center' ? 'origin at the centre' : 'origin at a corner'}, ${o.yUp ? 'Y up' : 'Y down'}${o.keepAspect ? ', aspect ratio kept' : ''}). u and v are 0..1 with the origin at the bottom left, the way TOPs address pixels.
+- led_groups.csv: one row per group with its centre.
+- led_uv_16bit.png: ${res.total} x 1 pixels. Red is u, green is v, blue is 1 for live pixels and 0 for dead ones. Feed it to the second input of a Remap TOP to sample your content at every LED, then convert the result with a TOP to CHOP.
+- Layout aspect ratio (width / height): ${norm.aspect.toFixed(4)}. Build your content at this aspect so u and v land where the LEDs are.
+
+## Output
+
+Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels per universe${o.stripsStartUniverse ? ', with each strip starting on a new universe' : ''}. Universes ${+o.firstUniverse || 0} to ${lastU} are used. Channel is the 1-based DMX address of the first colour channel. If you send DDP to WLED you can ignore both columns and send the pixels in index order.
+` });
+    files.push({ name: 'led_layout.png', render: 'layout' });
+    return { files, warnings, summary: { total: res.total, live: res.live, groups: gt.length, universes: lastU - (+o.firstUniverse || 0) + 1 } };
+  }
+
+  const api = { wled, fastled, touchdesigner, gridMap, groupTables, png16, crc32, safe, VERSION };
+  if (node) module.exports = api;
+  root.LM = root.LM || {}; root.LM.exporters = api;
+})(typeof self !== 'undefined' ? self : globalThis);
+</script>
+<script>
+/* EasyLEDMap: application. */
+(function () {
+  'use strict';
+  const { model: M, detect: D, geom: G, zip: Z, exporters: X } = window.LM;
+  const $ = id => document.getElementById(id);
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const k in (attrs || {})) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v; else if (k === 'text') el.textContent = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k === 'value') el.value = v; else if (k === 'checked') el.checked = !!v;
+      else if (k === 'style') el.style.cssText = v; else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(c));
+    return el;
+  }
+
+  /* ------------------------------------------------------------------ state */
+  const S = {
+    project: M.newProject(), images: new Map(), view: null, cams: {}, tool: 'select', activeStrip: null,
+    sel: new Set(), lastSel: null, undo: [], redo: [], colorBy: 'strip', photoDim: 1, showLabels: true,
+    path: null, calib: null, flatEdit: null, preview: null, layoutSel: null, exportTarget: 'wled', exportFile: 0,
+    fileHandle: null, spaceDown: false, savedAt: 0
+  };
+  let index = new Map();
+  window.LM.app = { S, get index() { return index; } };
+
+  const curSheet = () => S.project.sheets.find(s => s.id === S.view) || null;
+  const sheetById = id => S.project.sheets.find(s => s.id === id) || null;
+  const stripById = id => S.project.strips.find(s => s.id === id) || null;
+  function activeStrip(create) {
+    let st = stripById(S.activeStrip);
+    if (!st && S.project.strips.length) { st = S.project.strips[S.project.strips.length - 1]; S.activeStrip = st.id; }
+    if (!st && create) { st = M.newStrip(S.project); S.project.strips.push(st); S.activeStrip = st.id; }
+    return st;
+  }
+  function reindex() {
+    index = new Map();
+    S.project.strips.forEach(st => st.leds.forEach((l, k) => index.set(l.id, { strip: st, k, led: l })));
+    for (const g of S.project.groups) g.leds = g.leds.filter(id => index.has(id));
+    for (const id of [...S.sel]) if (!index.has(id)) S.sel.delete(id);
+    if (S.lastSel && !index.has(S.lastSel)) S.lastSel = null;
+  }
+  function pushUndo() { S.undo.push(JSON.stringify(S.project)); if (S.undo.length > 120) S.undo.shift(); S.redo = []; }
+  function changed() { reindex(); renderSide(); renderTabs(); draw(); autosaveSoon(); $('btnUndo').disabled = !S.undo.length; $('btnRedo').disabled = !S.redo.length; }
+  function mutate(fn) { pushUndo(); fn(); changed(); }
+  function restore(json) {
+    S.project = M.validate(JSON.parse(json));
+    if (S.view !== 'layout' && !sheetById(S.view)) S.view = S.project.sheets.length ? S.project.sheets[0].id : null;
+    if (!stripById(S.activeStrip)) S.activeStrip = null;
+    S.path = null; S.preview = null; S.calib = null; S.flatEdit = null;
+    $('projectName').value = S.project.name; changed(); syncSetup();
+  }
+  function undo() {
+    if (S.path && S.path.legs.length) return removeLeg();
+    if (!S.undo.length) return; S.redo.push(JSON.stringify(S.project)); restore(S.undo.pop());
+  }
+  function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(S.project)); restore(S.redo.pop()); }
+
+  /* ----------------------------------------------------------- sheet spaces */
+  // "Work space" is the flattened photo when a flatten is set, otherwise photo pixels.
+  const flatCache = new Map();
+  function flatH(sheet) {
+    if (!sheet.flat) return null;
+    const key = sheet.id + JSON.stringify(sheet.flat); let v = flatCache.get(key);
+    if (!v) { const H = G.homography(sheet.flat.quad, [[0, 0], [sheet.flat.w, 0], [sheet.flat.w, sheet.flat.h], [0, sheet.flat.h]]); v = H ? { H, I: G.invertH(H) } : null; flatCache.set(key, v); }
+    return v;
+  }
+  function toWork(sheet, x, y) { const f = flatH(sheet); return f ? G.applyH(f.H, x, y) : [x, y]; }
+  function toImage(sheet, x, y) { const f = flatH(sheet); return f ? G.applyH(f.I, x, y) : [x, y]; }
+  function pitchWork(sheet) {
+    if (!sheet.calib) return 0;
+    const a = toWork(sheet, sheet.calib.a[0], sheet.calib.a[1]), b = toWork(sheet, sheet.calib.b[0], sheet.calib.b[1]);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+  const pitchImage = sheet => sheet.calib ? Math.hypot(sheet.calib.b[0] - sheet.calib.a[0], sheet.calib.b[1] - sheet.calib.a[1]) : 0;
+  const ledRatio = () => Math.max(0.18, Math.min(0.6, 5 * (+S.project.setup.ledsPerMeter || 60) / 1000));
+  function prepFor(sheet) {
+    const im = S.images.get(sheet.id); if (!im || !im.img) return null;
+    if (!im.prep) {
+      const c = document.createElement('canvas'); c.width = sheet.w; c.height = sheet.h;
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im.img, 0, 0, sheet.w, sheet.h);
+      im.prep = D.prepare(x.getImageData(0, 0, sheet.w, sheet.h).data, sheet.w, sheet.h);
+    }
+    return im.prep;
+  }
+  /** Count and place LEDs between two photo points that both sit on LEDs. */
+  function legPoints(sheet, A, B, pitch, forceM) {
+    const a = toWork(sheet, A[0], A[1]), b = toWork(sheet, B[0], B[1]), L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    let res = { intervals: Math.max(1, Math.round(L / pitch)), confidence: 0, period: pitch, weak: true };
+    const prep = prepFor(sheet);
+    if (prep && L > 1) {
+      const f = flatH(sheet);
+      res = D.countPoly(prep, [a, b], pitch * ledRatio(), pitch, 0.3, f ? (x, y) => G.applyH(f.I, x, y) : null);
+    }
+    const Mn = forceM || res.intervals, pts = [];
+    for (let k = 1; k <= Mn; k++) pts.push(toImage(sheet, a[0] + (b[0] - a[0]) * k / Mn, a[1] + (b[1] - a[1]) * k / Mn));
+    return { M: Mn, auto: res.intervals, pts, conf: res.confidence, weak: !!res.weak, period: L / Mn, length: L };
+  }
+
+  /**
+   * Keep photos at one scale and laid out side by side in the Layout view.
+   * Every photo shows the same kind of strip, so LED spacing is the common ruler: each photo is
+   * scaled until its spacing matches the reference photo. Photos the user has scaled or moved
+   * by hand are left alone.
+   */
+  function autoLayout() {
+    const sheets = S.project.sheets; if (!sheets.length) return;
+    const ref = sheets.find(x => x.flat && x.calib) || sheets.find(x => x.calib);
+    if (ref) {
+      const target = pitchWork(ref) * (ref.place.manual ? ref.place.scale : 1);
+      for (const x of sheets) if (x.calib && !x.place.manual) { const pw = pitchWork(x); if (pw > 0) x.place.scale = target / pw; }
+    }
+    let cursor = null, gap = 0;
+    for (const x of sheets) {
+      const corners = () => { const Ms = G.sheetMatrix(x); return [[0, 0], [x.w, 0], [x.w, x.h], [0, x.h]].map(p => G.applyH(Ms, p[0], p[1])); };
+      let c = corners(), minX = Math.min(...c.map(p => p[0])), maxX = Math.max(...c.map(p => p[0])), minY = Math.min(...c.map(p => p[1]));
+      if (!x.place.moved) { if (cursor === null) cursor = minX; x.place.x += cursor - minX; x.place.y += 0 - minY; c = corners(); minX = Math.min(...c.map(p => p[0])); maxX = Math.max(...c.map(p => p[0])); }
+      gap = Math.max(gap, (maxX - minX) * 0.06); cursor = Math.max(cursor === null ? maxX : cursor, maxX) + gap;
+    }
+    delete S.cams.layout;
+  }
+
+  /* ----------------------------------------------------------------- canvas */
+  const canvas = $('canvas'), ctx = canvas.getContext('2d');
+  let dpr = 1, cw = 0, ch = 0, drawQueued = false;
+  function resize() {
+    const r = canvas.getBoundingClientRect(), pw = cw, ph = ch; dpr = window.devicePixelRatio || 1; cw = r.width; ch = r.height;
+    canvas.width = Math.max(1, Math.round(cw * dpr)); canvas.height = Math.max(1, Math.round(ch * dpr));
+    // A big change in size (rotating a phone, docking a window) refits the view so nothing is stranded off screen.
+    if (S.view && pw > 0 && (Math.abs(cw - pw) / pw > 0.3 || Math.abs(ch - ph) / Math.max(ph, 1) > 0.3)) fit(); else draw();
+  }
+  const cam = () => (S.cams[S.view] = S.cams[S.view] || { x: 0, y: 0, z: 1, fresh: true });
+  const toScreen = (x, y) => { const c = cam(); return [(x - c.x) * c.z, (y - c.y) * c.z]; };
+  const fromScreen = (sx, sy) => { const c = cam(); return [sx / c.z + c.x, sy / c.z + c.y]; };
+  function viewBounds() {
+    if (S.view === 'layout') {
+      let b = null; const add = (x, y) => { b = b ? [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)] : [x, y, x, y]; };
+      for (const s of S.project.sheets) { const Ms = G.sheetMatrix(s); for (const [x, y] of [[0, 0], [s.w, 0], [s.w, s.h], [0, s.h]]) { const p = G.applyH(Ms, x, y); add(p[0], p[1]); } }
+      return b || [0, 0, 100, 100];
+    }
+    const s = curSheet(); return s ? [0, 0, s.w, s.h] : [0, 0, 100, 100];
+  }
+  function fit() {
+    const b = viewBounds(), c = cam(), w = Math.max(b[2] - b[0], 1e-6), hh = Math.max(b[3] - b[1], 1e-6), pad = 24;
+    c.z = Math.max(1e-6, Math.min((cw - pad * 2) / w, (ch - pad * 2) / hh));
+    c.x = b[0] - (cw / c.z - w) / 2; c.y = b[1] - (ch / c.z - hh) / 2; c.fresh = false; draw();
+  }
+  function zoomAt(sx, sy, f) { const c = cam(), [wx, wy] = fromScreen(sx, sy); c.z = Math.max(1e-4, Math.min(1e4, c.z * f)); c.x = wx - sx / c.z; c.y = wy - sy / c.z; draw(); }
+  function draw() { if (drawQueued) return; drawQueued = true; requestAnimationFrame(() => { drawQueued = false; paint(); }); }
+
+  let groupOfLed = new Map();
+  function ledColor(l, st) {
+    if (S.colorBy === 'group') { const g = groupOfLed.get(l.id); return g ? g.color : '#9aa4a0'; }
+    return st.color;
+  }
+  function paint() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+    if (!S.view) return;
+    const c = cam(); if (c.fresh && cw > 0) { fit(); return; }
+    groupOfLed = new Map(); for (const g of S.project.groups) for (const id of g.leds) if (!groupOfLed.has(id)) groupOfLed.set(id, g);
+    const world = () => ctx.setTransform(c.z * dpr, 0, 0, c.z * dpr, -c.x * c.z * dpr, -c.y * c.z * dpr);
+    const labels = [];
+    if (S.view === 'layout') {
+      for (const s of S.project.sheets) {
+        const Ms = G.sheetMatrix(s), im = S.images.get(s.id);
+        world();
+        if (im && im.img && !s.flat && S.photoDim > 0) { ctx.save(); ctx.transform(Ms[0], Ms[3], Ms[1], Ms[4], Ms[2], Ms[5]); ctx.globalAlpha = S.photoDim * 0.85; ctx.drawImage(im.img, 0, 0, s.w, s.h); ctx.restore(); }
+        const q = [[0, 0], [s.w, 0], [s.w, s.h], [0, s.h]].map(p => G.applyH(Ms, p[0], p[1]));
+        ctx.beginPath(); q.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+        ctx.lineWidth = (s.id === S.layoutSel ? 2 : 1) / c.z; ctx.strokeStyle = s.id === S.layoutSel ? '#7fd6c4' : 'rgba(255,255,255,0.28)'; ctx.setLineDash(s.id === S.layoutSel ? [] : [6 / c.z, 5 / c.z]); ctx.stroke(); ctx.setLineDash([]);
+        const tl = toScreen(q[0][0], q[0][1]); labels.push({ x: tl[0] + 4, y: tl[1] - 6, t: s.name, sheet: true });
+      }
+      const mats = {}; for (const s of S.project.sheets) mats[s.id] = { Ms: G.sheetMatrix(s), s };
+      for (const st of S.project.strips) drawStrip(st, l => { const m = mats[l.s]; return m ? G.applyH(m.Ms, l.x, l.y) : null; }, l => { const m = mats[l.s]; if (!m) return 4; const p = G.applyH(m.Ms, l.x, l.y), q2 = G.applyH(m.Ms, l.x + 1, l.y); return (pitchImage(m.s) * 0.2 || Math.max(m.s.w, m.s.h) / 320) * Math.hypot(q2[0] - p[0], q2[1] - p[1]); }, labels, world);
+    } else {
+      const s = curSheet(), im = S.images.get(s.id);
+      world();
+      if (im && im.img) { ctx.globalAlpha = S.photoDim; ctx.imageSmoothingEnabled = c.z < 3; ctx.drawImage(im.img, 0, 0, s.w, s.h); ctx.globalAlpha = 1; }
+      else { ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1 / c.z; ctx.strokeRect(0, 0, s.w, s.h); }
+      const r0 = pitchImage(s) * 0.2 || Math.max(s.w, s.h) / 320;
+      for (const st of S.project.strips) drawStrip(st, l => l.s === s.id ? [l.x, l.y] : null, () => r0, labels, world);
+      if (S.flatEdit) drawFlat(s, world, c);
+      if (s.flat && !S.flatEdit) { world(); ctx.beginPath(); s.flat.quad.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.strokeStyle = 'rgba(127,214,196,0.45)'; ctx.lineWidth = 1 / c.z; ctx.setLineDash([5 / c.z, 5 / c.z]); ctx.stroke(); ctx.setLineDash([]); }
+      if (S.calib && S.calib.pts.length) { world(); for (const p of S.calib.pts) { ctx.beginPath(); ctx.arc(p[0], p[1], 7 / c.z, 0, 7); ctx.strokeStyle = '#ffd98a'; ctx.lineWidth = 2 / c.z; ctx.stroke(); } }
+      if (S.preview) {
+        world(); const pv = S.preview, col = pv.kind === 'turn' ? '#aab4af' : '#ffd98a';
+        ctx.beginPath(); ctx.moveTo(pv.a[0], pv.a[1]); ctx.lineTo(pv.b[0], pv.b[1]); ctx.strokeStyle = col; ctx.lineWidth = 1.5 / c.z; ctx.setLineDash([4 / c.z, 4 / c.z]); ctx.stroke(); ctx.setLineDash([]);
+        for (const p of pv.pts) { ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(r0, 3 / c.z), 0, 7); ctx.strokeStyle = col; ctx.lineWidth = 1.5 / c.z; ctx.stroke(); }
+        const sp = toScreen(pv.b[0], pv.b[1]); labels.push({ x: sp[0] + 14, y: sp[1] - 12, t: (pv.kind === 'turn' ? Math.max(0, pv.M - 1) + ' dead in the turn' : pv.M + ' more') + (pv.weak ? ' ?' : ''), big: true });
+      }
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    const taken = [];
+    for (const lb of labels) {
+      if (lb.x < -40 || lb.y < -20 || lb.x > cw + 40 || lb.y > ch + 20) continue;
+      ctx.font = (lb.big ? '600 13px' : lb.sheet ? '600 12px' : '11px') + ' system-ui, sans-serif';
+      const w = ctx.measureText(lb.t).width + 8, hh = lb.big ? 20 : 16, box = [lb.x, lb.y - hh / 2, lb.x + w, lb.y + hh / 2];
+      if (!lb.force && !lb.big && taken.some(t => box[0] < t[2] && box[2] > t[0] && box[1] < t[3] && box[3] > t[1])) continue;
+      taken.push(box);
+      ctx.fillStyle = lb.big ? 'rgba(16,20,22,0.92)' : 'rgba(16,20,22,0.78)'; ctx.beginPath(); ctx.roundRect(box[0], box[1], w, hh, 4); ctx.fill();
+      if (lb.c) { ctx.strokeStyle = lb.c; ctx.lineWidth = 1; ctx.stroke(); }
+      ctx.fillStyle = lb.big ? '#ffd98a' : '#f1f4f2'; ctx.fillText(lb.t, lb.x + 4, lb.y + 0.5);
+    }
+    if (S.marquee) { const m = S.marquee; ctx.strokeStyle = '#7fd6c4'; ctx.fillStyle = 'rgba(127,214,196,0.12)'; ctx.lineWidth = 1; const x = Math.min(m.x0, m.x1), y = Math.min(m.y0, m.y1), w = Math.abs(m.x1 - m.x0), hh = Math.abs(m.y1 - m.y0); ctx.fillRect(x, y, w, hh); ctx.strokeRect(x + 0.5, y + 0.5, w, hh); }
+  }
+  function drawStrip(st, pos, rad, labels, world) {
+    const c = cam(), pts = st.leds.map(pos); world();
+    // wire
+    ctx.beginPath(); let pen = false;
+    for (let i = 0; i < pts.length; i++) { const p = pts[i]; if (!p) { pen = false; continue; } if (pen) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); pen = true; }
+    ctx.strokeStyle = st.color; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5 / c.z; ctx.stroke(); ctx.globalAlpha = 1;
+    const minR = 3 / c.z, active = st.id === S.activeStrip;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]; if (!p) continue; const l = st.leds[i], r = Math.max(rad(l), minR), selected = S.sel.has(l.id);
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832);
+      if (l.dead) { ctx.fillStyle = 'rgba(20,24,26,0.7)'; ctx.fill(); ctx.strokeStyle = '#8b9590'; ctx.lineWidth = 1.2 / c.z; ctx.stroke(); ctx.beginPath(); ctx.moveTo(p[0] - r * 0.5, p[1] - r * 0.5); ctx.lineTo(p[0] + r * 0.5, p[1] + r * 0.5); ctx.moveTo(p[0] + r * 0.5, p[1] - r * 0.5); ctx.lineTo(p[0] - r * 0.5, p[1] + r * 0.5); ctx.stroke(); }
+      else { ctx.fillStyle = ledColor(l, st); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1 / c.z; ctx.stroke(); }
+      if (l.check && !selected) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 2.5 / c.z, 0, 6.2832); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5 / c.z; ctx.setLineDash([3 / c.z, 2 / c.z]); ctx.stroke(); ctx.setLineDash([]); }
+      if (selected) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 2 / c.z, 0, 6.2832); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / c.z; ctx.stroke(); }
+      if (i === 0) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 5 / c.z, 0, 6.2832); ctx.strokeStyle = st.color; ctx.lineWidth = 2 / c.z; ctx.stroke(); }
+    }
+    if (!S.showLabels) return;
+    const step = c.z * (pts.length > 1 ? avgGap(pts) : 20);
+    const every = step > 26 ? 1 : step > 13 ? 2 : step > 6 ? 5 : step > 2.6 ? 10 : step > 1 ? 25 : 50;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]; if (!p) continue; const l = st.leds[i], prev = st.leds[i - 1], next = st.leds[i + 1];
+      const edge = i === 0 || i === pts.length - 1 || (!l.dead && ((prev && prev.dead) || (next && next.dead) || l.brk || (next && next.brk)));
+      if (!edge && i % every) continue;
+      const sp = toScreen(p[0], p[1]), r = Math.max(rad(l), 3 / c.z) * c.z;
+      labels.push({ x: sp[0] + r + 3, y: sp[1] - r - 3, t: i === 0 ? st.name + ', 0' : String(i), c: active ? st.color : null, force: i === 0 });
+    }
+  }
+  function avgGap(pts) { let s = 0, n = 0; for (let i = 1; i < pts.length && n < 40; i++) if (pts[i] && pts[i - 1]) { s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); n++; } return n ? s / n : 20; }
+  function drawFlat(s, world, c) {
+    world(); const q = S.flatEdit.quad;
+    ctx.beginPath(); q.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+    ctx.fillStyle = 'rgba(127,214,196,0.10)'; ctx.fill(); ctx.strokeStyle = '#7fd6c4'; ctx.lineWidth = 2 / c.z; ctx.stroke();
+    q.forEach((p, i) => { ctx.beginPath(); ctx.arc(p[0], p[1], 8 / c.z, 0, 7); ctx.fillStyle = '#101416'; ctx.fill(); ctx.strokeStyle = '#7fd6c4'; ctx.stroke(); ctx.fillStyle = '#7fd6c4'; ctx.font = `${11 / c.z}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), p[0], p[1]); ctx.textAlign = 'start'; });
+  }
+
+  /* ------------------------------------------------------------ hit testing */
+  function ledAt(sx, sy) {
+    const s = curSheet(); if (!s) return null; const c = cam();
+    let best = null, bd = Math.max(9, (pitchImage(s) * 0.3 || 6) * c.z) ** 2;
+    for (const st of S.project.strips) for (const l of st.leds) { if (l.s !== s.id) continue; const p = toScreen(l.x, l.y), d = (p[0] - sx) ** 2 + (p[1] - sy) ** 2; if (d < bd) { bd = d; best = l; } }
+    return best;
+  }
+  function sheetAtLayout(wx, wy) {
+    for (let i = S.project.sheets.length - 1; i >= 0; i--) {
+      const s = S.project.sheets[i], I = G.invertH(G.sheetMatrix(s)); if (!I) continue; const p = G.applyH(I, wx, wy);
+      if (p[0] >= 0 && p[1] >= 0 && p[0] <= s.w && p[1] <= s.h) return s;
+    }
+    return null;
+  }
+
+  /* -------------------------------------------------------------- path tool */
+  function setTool(t) {
+    if (S.path && t !== 'path') finishPath();
+    S.tool = t; S.calib = null; S.preview = null;
+    if (t === 'path' && S.view === 'layout') { S.tool = 'select'; toast('Open a photo tab to draw a path.'); }
+    document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === S.tool));
+    if (S.tool === 'path') { const s = curSheet(); if (s && !s.calib) S.calib = { pts: [] }; }
+    updateHint(); draw(); renderPathBar();
+  }
+  function beginCalib() { S.calib = { pts: [] }; S.tool = 'path'; document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === 'path')); updateHint(); draw(); }
+  function pathClick(x, y, single) {
+    const s = curSheet(); if (!s) return;
+    if (S.calib) {
+      S.calib.pts.push([x, y]);
+      if (S.calib.pts.length === 2) {
+        const [a, b] = S.calib.pts;
+        if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 3) { S.calib.pts.pop(); toast('Those two clicks are on the same spot. Click the LED next to it.'); }
+        else { mutate(() => { s.calib = { a, b }; autoLayout(); }); S.calib = null; }
+      }
+      updateHint(); draw(); return;
+    }
+    if (!S.path) {
+      const st = activeStrip(true), last = st.leds[st.leds.length - 1];
+      const prev = st.leds[st.leds.length - 2];
+      // Continuing a strip: if it ends partway along a row, the next leg is the turn.
+      S.path = { strip: st.id, sheet: s.id, legs: [], pitch: pitchWork(s), next: last && prev && !last.dead && !prev.dead && !last.brk ? 'turn' : 'row' };
+      if (last && last.s === s.id) { addLeg(x, y); }
+      else { mutate(() => { st.leds.push(M.newLed(s.id, x, y, st.leds.length ? { brk: true } : null)); }); }
+      updateHint(); renderPathBar(); return;
+    }
+    if (single) addSingle(x, y); else addLeg(x, y);
+  }
+  /** Shift-click: place exactly one LED here, with no counting. Inside a turn it is a dead pixel. */
+  function addSingle(x, y) {
+    const s = curSheet(), st = stripById(S.path.strip), a = pathAnchor(); if (!a || !s) return;
+    const inTurn = $('optRowsTurns').checked && S.path.next === 'turn';
+    pushUndo();
+    const led = M.newLed(s.id, x, y, { dead: inTurn });
+    st.leds.push(led); S.path.legs.push({ kind: inTurn ? 'turn' : 'row', single: true, a: [a.x, a.y], b: [x, y], M: 1, auto: 1, ids: [led.id], prevPitch: S.path.pitch });
+    S.preview = null; changed(); renderPathBar(); updateHint();
+  }
+  const pathAnchor = () => { const st = S.path && stripById(S.path.strip); return st ? st.leds[st.leds.length - 1] : null; };
+  function makeLegLeds(sheet, leg, lp) {
+    return lp.pts.map((p, k) => M.newLed(sheet.id, p[0], p[1], { dead: leg.kind === 'turn' && k < lp.M - 1, brk: leg.kind === 'turn' && k === lp.M - 1 ? true : undefined, check: (lp.weak || lp.conf < 0.3) && leg.kind === 'row' ? true : undefined }));
+  }
+  function addLeg(x, y, forceKind) {
+    const s = curSheet(), st = stripById(S.path.strip), a = pathAnchor(); if (!a || !s) return;
+    if (Math.hypot(x - a.x, y - a.y) < Math.max(2, pitchImage(s) * 0.35)) return;
+    const kind = forceKind || ($('optRowsTurns').checked ? S.path.next : 'row');
+    const lp = legPoints(s, [a.x, a.y], [x, y], S.path.pitch || pitchWork(s));
+    const leg = { kind, a: [a.x, a.y], b: [x, y], M: lp.M, auto: lp.auto, conf: lp.conf, weak: lp.weak, prevPitch: S.path.pitch };
+    pushUndo();
+    const leds = makeLegLeds(s, leg, lp); leg.ids = leds.map(l => l.id); st.leds.push(...leds);
+    if (kind === 'row' && !lp.weak && lp.conf >= 0.3 && lp.M >= 4) S.path.pitch = lp.period;
+    S.path.legs.push(leg); S.path.next = kind === 'row' ? 'turn' : 'row'; S.preview = null;
+    changed(); renderPathBar(); updateHint();
+  }
+  function regenLeg(newM, newKind) {
+    const leg = S.path && S.path.legs[S.path.legs.length - 1]; if (!leg) return;
+    if (leg.single) { toast('That LED was placed by hand. Use Remove leg to take it out.'); return; }
+    const s = sheetById(S.path.sheet), st = stripById(S.path.strip);
+    if (newKind) leg.kind = newKind;
+    const m = Math.max(1, newM || leg.M), lp = legPoints(s, leg.a, leg.b, leg.prevPitch || pitchWork(s), m);
+    lp.weak = false; lp.conf = 1;
+    st.leds.splice(st.leds.length - leg.ids.length, leg.ids.length);
+    const leds = makeLegLeds(s, leg, lp); leg.ids = leds.map(l => l.id); leg.M = m; st.leds.push(...leds);
+    if (leg.kind === 'row' && m >= 4) S.path.pitch = lp.period;
+    S.path.next = leg.kind === 'row' ? 'turn' : 'row';
+    changed(); renderPathBar(); updateHint();
+  }
+  function removeLeg() {
+    if (!S.path) return;
+    if (!S.path.legs.length) { cancelPathStart(); return; }
+    const leg = S.path.legs.pop(), keep = S.path;
+    if (S.undo.length) { const json = S.undo.pop(); S.project = M.validate(JSON.parse(json)); }
+    S.path = keep; S.path.pitch = leg.prevPitch; if (!leg.single) S.path.next = leg.kind; S.preview = null;
+    changed(); renderPathBar(); updateHint();
+  }
+  function cancelPathStart() { S.path = null; S.preview = null; renderPathBar(); updateHint(); draw(); }
+  function finishPath() {
+    if (!S.path) return; const p = S.path; S.path = null; S.preview = null;
+    const st = stripById(p.strip);
+    if (st && p.legs.length && $('optGroupRows').checked && $('optRowsTurns').checked) { regroupStrip(st, false); }
+    changed(); renderPathBar(); updateHint();
+  }
+  /** Rebuild the automatic groups of one strip from its runs of live pixels. */
+  function regroupStrip(st, withUndo) {
+    const run = () => {
+      const mine = new Set(st.leds.map(l => l.id));
+      S.project.groups = S.project.groups.filter(g => g.auto !== st.id);
+      const taken = new Set(); for (const g of S.project.groups) for (const id of g.leds) if (mine.has(id)) taken.add(id);
+      const fresh = M.groupsFromRuns(S.project, st, st.name).filter(g => !g.leds.every(id => taken.has(id)));
+      fresh.forEach((g, i) => { g.auto = st.id; g.name = `${st.name} row ${i + 1}`; });
+      S.project.groups.push(...fresh);
+    };
+    if (withUndo) mutate(run); else run();
+  }
+  function renderPathBar() {
+    const on = S.tool === 'path' && S.view !== 'layout' && !!S.view; $('pathOpts').hidden = !on; if (!on) return;
+    const leg = S.path && S.path.legs[S.path.legs.length - 1], has = !!leg;
+    for (const id of ['btnLegMinus', 'btnLegPlus', 'btnLegType', 'btnLegJump', 'btnLegUndo']) $(id).disabled = !has;
+    $('btnPathDone').disabled = !S.path;
+    $('legInfo').textContent = has ? leg.single ? (leg.kind === 'turn' ? 'One dead LED placed' : 'One LED placed') : (leg.kind === 'turn' ? (leg.M === 1 ? 'Jump: no LEDs between' : `Turn: ${Math.max(0, leg.M - 1)} dead`) : `Row: ${leg.M} added`) + (leg.M !== leg.auto ? ` (tool counted ${leg.auto})` : '') : '';
+  }
+
+  /* ------------------------------------------------------------- selection */
+  function selRuns() {
+    // Returns [{ strip, from, to }] for the selection, per strip, as index ranges if contiguous.
+    const by = new Map();
+    for (const id of S.sel) { const e = index.get(id); if (!e) continue; if (!by.has(e.strip)) by.set(e.strip, []); by.get(e.strip).push(e.k); }
+    const out = [];
+    for (const [strip, ks] of by) { ks.sort((a, b) => a - b); out.push({ strip, ks, from: ks[0], to: ks[ks.length - 1], contiguous: ks[ks.length - 1] - ks[0] === ks.length - 1 }); }
+    return out;
+  }
+  function selectRunAround(l) {
+    const e = index.get(l.id); if (!e) return; const leds = e.strip.leds; let a = e.k, b = e.k;
+    while (a > 0 && leds[a - 1].dead === l.dead && !leds[a].brk) a--;
+    while (b < leds.length - 1 && leds[b + 1].dead === l.dead && !leds[b + 1].brk) b++;
+    S.sel = new Set(leds.slice(a, b + 1).map(x => x.id)); S.lastSel = l.id; S.activeStrip = e.strip.id;
+  }
+  function setDead(v) { if (!S.sel.size) return; mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) { e.led.dead = v; delete e.led.check; } } }); }
+  function toggleDead() { if (!S.sel.size) return; const anyLive = [...S.sel].some(id => { const e = index.get(id); return e && !e.led.dead; }); setDead(anyLive); }
+  function deleteSel() { if (!S.sel.size) return; mutate(() => { for (const st of S.project.strips) st.leds = st.leds.filter(l => !S.sel.has(l.id)); S.sel.clear(); }); }
+  function nudge(dx, dy) { if (!S.sel.size) return; mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) { e.led.x += dx; e.led.y += dy; } } }); }
+  /** Replace the selected run with `count` evenly spaced LEDs between its two ends. */
+  function respace(count) {
+    const runs = selRuns(); if (runs.length !== 1 || !runs[0].contiguous || runs[0].ks.length < 2) { toast('Select one unbroken run of at least two LEDs first.'); return; }
+    const { strip, from, to } = runs[0], old = strip.leds.slice(from, to + 1), n = Math.max(2, Math.round(count || old.length));
+    const a = old[0], b = old[old.length - 1]; if (a.s !== b.s) { toast('That run crosses two photos.'); return; }
+    const sh = sheetById(a.s), wa = toWork(sh, a.x, a.y), wb = toWork(sh, b.x, b.y);
+    mutate(() => {
+      const fresh = [];
+      for (let j = 0; j < n; j++) {
+        const src = old[Math.round(j * (old.length - 1) / (n - 1))], t = j / (n - 1), p = toImage(sh, wa[0] + (wb[0] - wa[0]) * t, wa[1] + (wb[1] - wa[1]) * t);
+        const keepId = j === 0 ? a.id : j === n - 1 ? b.id : null;
+        const led = M.newLed(sh.id, p[0], p[1], { dead: src.dead, brk: j === 0 ? a.brk : undefined }); if (keepId) led.id = keepId;
+        if (!keepId) for (const g of S.project.groups) if (g.leds.includes(src.id)) g.leds.push(led.id);
+        fresh.push(led);
+      }
+      strip.leds.splice(from, old.length, ...fresh); S.sel = new Set(fresh.map(l => l.id));
+    });
+  }
+  function groupFromSel() {
+    if (!S.sel.size) return;
+    mutate(() => { const g = M.newGroup(S.project); const ids = [...S.sel].filter(id => index.has(id)).sort((x, y) => { const a = index.get(x), b = index.get(y); return S.project.strips.indexOf(a.strip) - S.project.strips.indexOf(b.strip) || a.k - b.k; }); g.leds = ids; S.project.groups.push(g); });
+    S.colorBy = 'group'; $('colorBy').value = 'group'; draw();
+  }
+  function reorderFrom(led, mode) {
+    const e = index.get(led.id); if (!e) return; const st = e.strip;
+    if (new Set(st.leds.map(l => l.s)).size > 1) { toast('This strip spans more than one photo, so it cannot be reordered automatically.'); return; }
+    mutate(() => { const sh = sheetById(led.s), pts = st.leds.map(l => { const w = toWork(sh, l.x, l.y); return { x: w[0], y: w[1] }; }); const order = (mode === 'serp' ? D.orderSerpentine : D.orderNearest)(pts, e.k); st.leds = order.map(i => st.leds[i]); });
+  }
+
+  /* --------------------------------------------------------------- pointers */
+  const ptrs = new Map(); let drag = null, pinch = null;
+  const local = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.addEventListener('pointerdown', e => {
+    canvas.focus({ preventScroll: true }); const [sx, sy] = local(e); ptrs.set(e.pointerId, [sx, sy]);
+    if (!S.view) return;
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), cx: (a[0] + b[0]) / 2, cy: (a[1] + b[1]) / 2 }; drag = null; S.marquee = null; return; }
+    const c = cam(), [wx, wy] = fromScreen(sx, sy);
+    if (e.button === 1 || e.button === 2 || S.spaceDown || S.tool === 'pan') { drag = { type: 'pan', sx, sy, cx: c.x, cy: c.y }; return; }
+    if (S.view === 'layout') { const s = sheetAtLayout(wx, wy); S.layoutSel = s ? s.id : null; renderSide(); draw(); drag = s ? { type: 'sheet', s, sx, sy, px: s.place.x, py: s.place.y, moved: false } : { type: 'pan', sx, sy, cx: c.x, cy: c.y }; return; }
+    if (S.flatEdit) { const qi = S.flatEdit.quad.findIndex(p => { const sp = toScreen(p[0], p[1]); return Math.hypot(sp[0] - sx, sp[1] - sy) < 16; }); if (qi >= 0) { drag = { type: 'flat', qi }; return; } }
+    if (S.tool === 'path') { drag = { type: 'click', sx, sy, wx, wy, shift: e.shiftKey }; return; }
+    if (S.tool === 'add') { addLedAt(wx, wy); return; }
+    const l = ledAt(sx, sy);
+    if (l) {
+      const e2 = index.get(l.id);
+      if (e.shiftKey && S.lastSel && index.get(S.lastSel) && index.get(S.lastSel).strip === e2.strip) { const k0 = index.get(S.lastSel).k, a = Math.min(k0, e2.k), b = Math.max(k0, e2.k); for (let k = a; k <= b; k++) S.sel.add(e2.strip.leds[k].id); }
+      else if (e.ctrlKey || e.metaKey) { if (S.sel.has(l.id)) S.sel.delete(l.id); else S.sel.add(l.id); S.lastSel = l.id; }
+      else { if (!S.sel.has(l.id)) S.sel = new Set([l.id]); S.lastSel = l.id; }
+      S.activeStrip = e2.strip.id; drag = { type: 'move', sx, sy, wx, wy, moved: false, orig: null };
+      renderSide(); draw();
+    } else { if (!e.shiftKey) S.sel.clear(); drag = { type: 'marquee', add: e.shiftKey ? new Set(S.sel) : new Set() }; S.marquee = { x0: sx, y0: sy, x1: sx, y1: sy }; renderSide(); draw(); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const [sx, sy] = local(e); if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [sx, sy]);
+    if (!S.view) return; const c = cam();
+    if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2; c.x -= (cx - pinch.cx) / c.z; c.y -= (cy - pinch.cy) / c.z; zoomAt(cx, cy, d / (pinch.d || d)); pinch = { d, cx, cy }; return; }
+    const [wx, wy] = fromScreen(sx, sy);
+    if (!drag) {
+      if (S.tool === 'path' && S.path && !S.calib && S.view !== 'layout') { const a = pathAnchor(), s = curSheet(); if (a && a.s === s.id && Math.hypot(wx - a.x, wy - a.y) > pitchImage(s) * 0.5) { const kind = $('optRowsTurns').checked ? S.path.next : 'row', lp = legPoints(s, [a.x, a.y], [wx, wy], S.path.pitch || pitchWork(s)); S.preview = { a: [a.x, a.y], b: [wx, wy], pts: lp.pts, M: lp.M, kind, weak: lp.weak || lp.conf < 0.3 }; } else S.preview = null; draw(); }
+      return;
+    }
+    if (drag.type === 'pan') { c.x = drag.cx - (sx - drag.sx) / c.z; c.y = drag.cy - (sy - drag.sy) / c.z; draw(); }
+    else if (drag.type === 'click') { if (Math.hypot(sx - drag.sx, sy - drag.sy) > 6) { drag = { type: 'pan', sx: drag.sx, sy: drag.sy, cx: c.x, cy: c.y }; S.preview = null; } }
+    else if (drag.type === 'sheet') { if (!drag.moved && Math.hypot(sx - drag.sx, sy - drag.sy) > 3) { pushUndo(); drag.moved = true; drag.s.place.moved = true; } if (drag.moved) { drag.s.place.x = drag.px + (sx - drag.sx) / c.z; drag.s.place.y = drag.py + (sy - drag.sy) / c.z; draw(); } }
+    else if (drag.type === 'flat') { S.flatEdit.quad[drag.qi] = [wx, wy]; draw(); }
+    else if (drag.type === 'move') {
+      if (!drag.moved && Math.hypot(sx - drag.sx, sy - drag.sy) > 3) { pushUndo(); drag.moved = true; drag.orig = [...S.sel].map(id => { const en = index.get(id); return en ? [en.led, en.led.x, en.led.y] : null; }).filter(Boolean); }
+      if (drag.moved) { const dx = wx - drag.wx, dy = wy - drag.wy; for (const [l, x, y] of drag.orig) { l.x = x + dx; l.y = y + dy; delete l.check; } draw(); }
+    } else if (drag.type === 'marquee') {
+      S.marquee.x1 = sx; S.marquee.y1 = sy; const s = curSheet(), m = S.marquee, x0 = Math.min(m.x0, m.x1), x1 = Math.max(m.x0, m.x1), y0 = Math.min(m.y0, m.y1), y1 = Math.max(m.y0, m.y1);
+      S.sel = new Set(drag.add); for (const st of S.project.strips) for (const l of st.leds) { if (l.s !== s.id) continue; const p = toScreen(l.x, l.y); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) S.sel.add(l.id); }
+      draw();
+    }
+  });
+  function endPointer(e) {
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+    const d = drag; drag = null; if (!d) return;
+    if (d.type === 'click') pathClick(d.wx, d.wy, d.shift);
+    else if (d.type === 'move' && d.moved) changed();
+    else if (d.type === 'sheet' && d.moved) changed();
+    else if (d.type === 'marquee') { S.marquee = null; renderSide(); draw(); }
+  }
+  canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('dblclick', e => {
+    if (S.tool === 'path' && S.path) { finishPath(); return; }
+    if (S.tool !== 'select' || S.view === 'layout') return; const [sx, sy] = local(e), l = ledAt(sx, sy); if (l) { selectRunAround(l); renderSide(); draw(); }
+  });
+  canvas.addEventListener('wheel', e => {
+    if (!S.view) return; e.preventDefault(); const [sx, sy] = local(e), c = cam();
+    const mouseWheel = !e.ctrlKey && e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50;
+    if (e.ctrlKey || mouseWheel || e.deltaMode === 1) zoomAt(sx, sy, Math.exp(-(e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY) * (e.ctrlKey ? 0.01 : 0.0015)));
+    else { c.x += e.deltaX / c.z; c.y += e.deltaY / c.z; draw(); }
+  }, { passive: false });
+  function addLedAt(x, y) {
+    const s = curSheet(); if (!s) return;
+    // Insert between two neighbours when the click lands on the wire between them.
+    let best = null, bd = Infinity;
+    for (const st of S.project.strips) for (let i = 1; i < st.leds.length; i++) {
+      const a = st.leds[i - 1], b = st.leds[i]; if (a.s !== s.id || b.s !== s.id) continue;
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, t = ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / (L * L);
+      if (t <= 0.15 || t >= 0.85) continue; const d = Math.hypot(a.x + (b.x - a.x) * t - x, a.y + (b.y - a.y) * t - y);
+      if (d < L * 0.35 && d < bd) { bd = d; best = { st, i, dead: a.dead && b.dead }; }
+    }
+    mutate(() => {
+      if (best) { const led = M.newLed(s.id, x, y, { dead: best.dead }); best.st.leds.splice(best.i, 0, led); S.activeStrip = best.st.id; S.sel = new Set([led.id]); S.lastSel = led.id; for (const g of S.project.groups) { const a = g.leds.indexOf(best.st.leds[best.i - 1].id), b = g.leds.includes(best.st.leds[best.i + 1].id); if (a >= 0 && b) g.leds.splice(a + 1, 0, led.id); } }
+      else { const st = activeStrip(true), led = M.newLed(s.id, x, y); st.leds.push(led); S.sel = new Set([led.id]); S.lastSel = led.id; }
+    });
+  }
+
+  /* --------------------------------------------------------------- keyboard */
+  const typing = e => { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable); };
+  window.addEventListener('keydown', e => {
+    if (document.querySelector('dialog[open]')) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key;
+    if (mod && k.toLowerCase() === 's') { e.preventDefault(); saveProject(); return; }
+    if (typing(e)) { if (k === 'Enter' || k === 'Escape') e.target.blur(); return; }
+    if (mod && k.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+    if (mod && k.toLowerCase() === 'a') { e.preventDefault(); const st = activeStrip(false); if (st) { S.sel = new Set(st.leds.filter(l => S.view === 'layout' || l.s === S.view).map(l => l.id)); renderSide(); draw(); } return; }
+    if (mod) return;
+    if (k === ' ') { S.spaceDown = true; e.preventDefault(); canvas.style.cursor = 'grab'; return; }
+    const kl = k.toLowerCase();
+    if (S.path || S.calib) {
+      if (k === 'Enter') { finishPath(); return; }
+      if (k === 'Escape') { if (S.calib && curSheet() && curSheet().calib) { S.calib = null; updateHint(); draw(); } else if (S.path) finishPath(); else setTool('select'); return; }
+      if (k === 'Backspace' || k === 'Delete') { e.preventDefault(); if (S.calib && S.calib.pts.length) { S.calib.pts.pop(); draw(); updateHint(); } else removeLeg(); return; }
+      if (k === '[') { const leg = S.path && S.path.legs[S.path.legs.length - 1]; if (leg) regenLeg(leg.M - 1); return; }
+      if (k === ']') { const leg = S.path && S.path.legs[S.path.legs.length - 1]; if (leg) regenLeg(leg.M + 1); return; }
+      if (kl === 'j') { if (S.path && S.path.legs.length) regenLeg(1, 'turn'); return; }
+      if (kl === 't') { const leg = S.path && S.path.legs[S.path.legs.length - 1]; if (leg) regenLeg(leg.M, leg.kind === 'row' ? 'turn' : 'row'); return; }
+    }
+    if (kl === 'v') setTool('select'); else if (kl === 'p') setTool('path'); else if (kl === 'a') setTool('add'); else if (kl === 'h') setTool('pan');
+    else if (kl === 'f') fit(); else if (k === '+' || k === '=') zoomAt(cw / 2, ch / 2, 1.3); else if (k === '-' || k === '_') zoomAt(cw / 2, ch / 2, 1 / 1.3);
+    else if (k === 'Escape') { if (S.flatEdit) { S.flatEdit = null; renderSide(); } S.sel.clear(); renderSide(); draw(); }
+    else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); deleteSel(); }
+    else if (kl === 'd') toggleDead(); else if (kl === 'g') groupFromSel();
+    else if (k === '[' || k === ']') { const r = selRuns(); if (r.length === 1 && r[0].contiguous && r[0].ks.length >= 2) respace(r[0].ks.length + (k === ']' ? 1 : -1)); }
+    else if (k.startsWith('Arrow') && S.sel.size && S.view !== 'layout') { e.preventDefault(); const st = (e.shiftKey ? 5 : 1) / cam().z * (e.altKey ? 0.25 : 1); nudge(k === 'ArrowLeft' ? -st : k === 'ArrowRight' ? st : 0, k === 'ArrowUp' ? -st : k === 'ArrowDown' ? st : 0); }
+  });
+  window.addEventListener('keyup', e => { if (e.key === ' ') { S.spaceDown = false; canvas.style.cursor = ''; } });
+
+  /* ------------------------------------------------------------------ hints */
+  function updateHint() {
+    let t = '';
+    const s = curSheet(), k = x => `<kbd>${x}</kbd>`;
+    if (!S.view) t = '';
+    else if (S.view === 'layout') t = 'Drag a photo to place it in the final assembly. Fine tune position, rotation and scale in the panel.';
+    else if (S.flatEdit) t = 'Drag handles 1 to 4 onto the corners of a flat rectangle, clockwise from its top left. Then enter its size and apply.';
+    else if (S.tool === 'path') {
+      if (S.calib) t = S.calib.pts.length ? 'Now click the LED right next to it.' : 'First, click one LED so the tool can learn the spacing. Zoom in for accuracy.';
+      else if (!S.path) { const st = activeStrip(false), last = st && st.leds[st.leds.length - 1]; t = last && last.s === s.id ? `Click the next corner to continue ${esc(st.name)} from pixel ${st.leds.length - 1}. To start a separate strip, add one in the Strips panel.` : 'Click the first LED of the strip, where the data enters.'; }
+      else if (!S.path.legs.length) t = 'Click the last LED of this straight run. The tool counts the LEDs in between.';
+      else if ($('optRowsTurns').checked) t = (S.path.next === 'turn' ? `Click the first LED of the next row. The tool estimates the dead LEDs in the turn: check the count. On a curved turn, ${k('Shift')}-click each LED in it.` : 'Click the last LED of this row.') + ` Wrong count? ${k('[')} ${k(']')}. ${k('Backspace')} steps back, ${k('Enter')} finishes.`;
+      else t = `Click the next corner. ${k('Shift')}-click places one LED exactly. ${k('[')} ${k(']')} fix the count, ${k('Backspace')} steps back, ${k('Enter')} finishes.`;
+    } else if (S.tool === 'add') t = 'Click to add an LED to the end of the active strip. Click on the wire between two LEDs to insert one there.';
+    else if (S.tool === 'pan') t = 'Drag to pan. Scroll or pinch to zoom.';
+    else if (!S.project.strips.some(st => st.leds.length)) t = `Choose ${k('Draw path')} and trace the strip from the first LED.`;
+    else if (S.sel.size) t = `${k('D')} dead or live, ${k('G')} group, ${k('[')} ${k(']')} one fewer or one more in the run, ${k('Delete')} removes, arrows nudge.`;
+    else t = 'Click an LED, drag a box, or double-click to select a whole run. Shift-click selects a range along the wire.';
+    $('hint').innerHTML = t ? `<span>${t}</span>` : '';
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, ch2 => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch2]));
+  let toastTimer = 0;
+  function toast(msg, action, fn) {
+    const t = $('toast'); t.textContent = msg; if (action) t.append(h('button', { text: action, onclick: () => { t.classList.remove('show'); fn(); } }));
+    t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), action ? 9000 : 4200);
+  }
+
+  /* ------------------------------------------------------------------- tabs */
+  function renderTabs() {
+    const el = $('tabs'); el.textContent = '';
+    $('empty').hidden = S.project.sheets.length > 0; $('viewOpts').hidden = !S.project.sheets.length;
+    for (const s of S.project.sheets) {
+      const n = S.project.strips.reduce((a, st) => a + st.leds.filter(l => l.s === s.id).length, 0);
+      const tab = h('button', { class: 'tab' + (S.view === s.id ? ' on' : ''), role: 'tab', title: 'Double-click to rename', onclick: () => setView(s.id), ondblclick: () => renameTab(tab, s) }, h('span', { text: s.name }), n ? h('span', { class: 'n', text: String(n) }) : null);
+      el.append(tab);
+    }
+    el.append(h('button', { class: 'tab add', text: '+ Add photos', onclick: () => $('fileImages').click() }));
+    if (S.project.sheets.length) el.append(h('button', { class: 'tab layout' + (S.view === 'layout' ? ' on' : ''), text: 'Layout', title: 'Arrange the photos into the final assembly', onclick: () => setView('layout') }));
+  }
+  function renameTab(tab, s) {
+    const inp = h('input', { value: s.name, 'aria-label': 'Photo name' }); tab.textContent = ''; tab.append(inp); inp.focus(); inp.select();
+    const done = () => { const v = inp.value.trim(); if (v && v !== s.name) mutate(() => { s.name = v; }); else renderTabs(); };
+    inp.addEventListener('blur', done); inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = s.name; inp.blur(); } e.stopPropagation(); });
+  }
+  function setView(v) { if (S.path) finishPath(); S.view = v; S.calib = null; S.preview = null; S.flatEdit = null; if (S.tool === 'path') { if (v === 'layout') setTool('select'); else { const s = curSheet(); if (s && !s.calib) S.calib = { pts: [] }; } } renderTabs(); renderSide(); renderPathBar(); updateHint(); draw(); }
+
+  /* ---------------------------------------------------------------- sidebar */
+  function syncSetup() {
+    const s = S.project.setup; $('fChipset').value = s.chipset; $('fVoltage').value = s.voltage; $('fMa').value = s.maPerPixel; $('fOrder').value = s.colorOrder; $('fLpm').value = s.ledsPerMeter; $('fPsu').value = s.psuAmps || '';
+    renderPower();
+  }
+  function renderPower() {
+    const P = M.power(S.project), s = S.project.setup, box = $('powerBox'); box.textContent = '';
+    if (!P.total) { box.append(h('span', { class: 'fine', text: 'Power estimates appear here once LEDs are mapped.' })); return; }
+    box.append(h('span', null, h('b', { text: `${P.live} mapped` }), ` of ${P.total} LEDs` + (P.total - P.live ? ` (${P.total - P.live} dead)` : '')));
+    box.append(h('span', null, 'Full white: ', h('b', { text: `${P.ampsLive.toFixed(1)} A` }), `, ${P.wattsLive.toFixed(0)} W at ${s.voltage} V`));
+    if (+s.psuAmps > 0) { const ok = +s.psuAmps >= P.ampsLive; box.append(h('span', null, ok ? `Your ${s.psuAmps} A supply covers full white.` : `Your ${s.psuAmps} A supply is under full white draw. Limit WLED to ${P.wledLimitMa} mA.`)); }
+    else box.append(h('span', null, `Supply for full white with 20% headroom: ${P.psuAmps.toFixed(1)} A`));
+    if (P.longRuns.length) box.append(h('span', null, `${P.longRuns.map(r => r.name).join(', ')}: over ${P.injectEvery} LEDs on one run. Plan power injection at both ends.`));
+    box.append(h('span', { class: 'fine', text: 'Estimates from the fields above, not measurements.' }));
+  }
+  function renderSide() {
+    renderPower(); renderPhoto(); renderStrips(); renderSel(); renderGroups(); updateHint();
+  }
+  function num(label, value, on, attrs) { const i = h('input', Object.assign({ type: 'number', step: 'any', value: value }, attrs || {})); i.addEventListener('change', () => on(parseFloat(i.value))); return h('label', null, label, i); }
+  function renderPhoto() {
+    const box = $('photoForm'); box.textContent = ''; const sec = $('secPhoto');
+    if (S.view === 'layout') {
+      sec.querySelector('summary').firstChild.textContent = 'Layout';
+      const s = sheetById(S.layoutSel);
+      if (!s) { box.append(h('p', { class: 'note', text: 'Click a photo outline to select it, then drag it into place. Photos are scaled to match each other using their LED spacing.' })); return; }
+      box.append(h('p', { class: 'note', text: s.name + (s.flat ? ' (flattened)' : '') }));
+      const set = (k, v) => { if (!isFinite(v)) return; mutate(() => { s.place[k] = v; if (k === 'scale') s.place.manual = true; else s.place.moved = true; }); };
+      box.append(h('div', { class: 'row2' }, num('X', +s.place.x.toFixed(2), v => set('x', v)), num('Y', +s.place.y.toFixed(2), v => set('y', v))));
+      box.append(h('div', { class: 'row2' }, num('Rotation, degrees', +(s.place.rot * 180 / Math.PI).toFixed(2), v => set('rot', v * Math.PI / 180)), num('Scale', +s.place.scale.toFixed(4), v => { if (v > 0) set('scale', v); }, { min: 0 })));
+      box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: 'Rotate 90°', onclick: () => set('rot', s.place.rot + Math.PI / 2) }),
+        (s.place.manual || s.place.moved) ? h('button', { class: 'btn tiny', text: 'Reset placement', title: 'Let the tool scale and place this photo again', onclick: () => mutate(() => { delete s.place.manual; delete s.place.moved; s.place.rot = 0; autoLayout(); }) }) : null));
+      if (s.flat) box.append(h('p', { class: 'note', text: 'Flattened photos are drawn as LED positions only here. The photo itself is not warped yet.' }));
+      return;
+    }
+    sec.querySelector('summary').firstChild.textContent = 'This photo';
+    const s = curSheet(); if (!s) { box.append(h('p', { class: 'note', text: 'Add a photo to begin.' })); return; }
+    if (S.flatEdit) {
+      box.append(h('p', { class: 'note', text: 'Drag the four numbered handles onto a rectangle that lies flat with the LEDs: floor tiles, a sheet of paper, a table edge. Go clockwise from its top left. Then enter its real size. Any unit works if you use the same one on every photo.' }));
+      const w = h('input', { type: 'number', step: 'any', min: 0, value: S.flatEdit.w }), hh = h('input', { type: 'number', step: 'any', min: 0, value: S.flatEdit.h });
+      box.append(h('div', { class: 'row2' }, h('label', null, 'Rectangle width', w), h('label', null, 'Rectangle height', hh)));
+      box.append(h('div', { class: 'btnrow' },
+        h('button', { class: 'btn tiny primary', text: 'Apply', onclick: () => { const W = parseFloat(w.value), H = parseFloat(hh.value); if (!(W > 0 && H > 0)) { toast('Enter the width and height of the rectangle.'); return; } const q = S.flatEdit.quad.map(p => [p[0], p[1]]); if (!G.homography(q, [[0, 0], [W, 0], [W, H], [0, H]])) { toast('Those four corners do not make a usable rectangle.'); return; } mutate(() => { s.flat = { quad: q, w: W, h: H }; autoLayout(); }); S.flatEdit = null; renderSide(); draw(); toast('Photo flattened. Spacing and counts now use the corrected geometry.'); } }),
+        h('button', { class: 'btn tiny', text: 'Cancel', onclick: () => { S.flatEdit = null; renderSide(); draw(); } }),
+        s.flat ? h('button', { class: 'btn tiny danger', text: 'Remove flattening', onclick: () => { mutate(() => { s.flat = null; autoLayout(); }); S.flatEdit = null; renderSide(); draw(); } }) : null));
+      return;
+    }
+    const pw = pitchWork(s);
+    box.append(h('p', { class: 'note' }, s.calib ? `LED spacing: ${pitchImage(s).toFixed(1)} px in the photo.` : 'LED spacing not set yet. The Draw path tool asks for it the first time.'));
+    box.append(h('div', { class: 'btnrow' },
+      h('button', { class: 'btn tiny', text: s.calib ? 'Set spacing again' : 'Set spacing', onclick: beginCalib }),
+      h('button', { class: 'btn tiny', text: s.flat ? 'Edit flattening' : 'Flatten photo', title: 'Correct for the camera angle using a rectangle of known size', onclick: () => { const m = Math.min(s.w, s.h) * 0.25, cx = s.w / 2, cy = s.h / 2; S.flatEdit = s.flat ? { quad: s.flat.quad.map(p => [p[0], p[1]]), w: s.flat.w, h: s.flat.h } : { quad: [[cx - m, cy - m], [cx + m, cy - m], [cx + m, cy + m], [cx - m, cy + m]], w: 12, h: 12 }; if (S.path) finishPath(); S.tool = 'select'; setTool('select'); renderSide(); draw(); } }),
+      h('button', { class: 'btn tiny', text: 'Find lit LEDs', title: 'For photos taken with the LEDs switched on', onclick: () => findLit(s) })));
+    if (!s.flat) box.append(h('p', { class: 'note', text: 'Shot at an angle? Flatten the photo first so spacing stays even across it.' }));
+    box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny danger', text: 'Remove photo', onclick: () => removeSheet(s) })));
+    void pw;
+  }
+  function removeSheet(s) {
+    const n = S.project.strips.reduce((a, st) => a + st.leds.filter(l => l.s === s.id).length, 0);
+    if (n && !confirm(`Remove "${s.name}" and the ${n} LEDs mapped on it?`)) return;
+    mutate(() => { for (const st of S.project.strips) st.leds = st.leds.filter(l => l.s !== s.id); S.project.sheets = S.project.sheets.filter(x => x !== s); S.images.delete(s.id); autoLayout(); S.view = S.project.sheets.length ? S.project.sheets[0].id : null; });
+    renderTabs(); updateHint();
+  }
+  function findLit(s) {
+    const prep = prepFor(s); if (!prep) { toast('This photo has no image data.'); return; }
+    const r = D.detectLit(prep);
+    if (r.blobs.length < 2) { toast('No lit LEDs found. For unlit strips, use Draw path.'); return; }
+    if (r.blobs.length > 6000) { toast(`Found ${r.blobs.length} bright spots, which is too many to be LEDs. Is this photo taken with the LEDs on?`); return; }
+    mutate(() => {
+      const st = activeStrip(true), start = r.blobs.reduce((bi, b, i) => (b.x + b.y < r.blobs[bi].x + r.blobs[bi].y ? i : bi), 0), order = D.orderNearest(r.blobs, start);
+      const leds = order.map(i => M.newLed(s.id, r.blobs[i].x, r.blobs[i].y)); st.leds.push(...leds);
+      if (!s.calib && leds.length > 1) { const d = []; for (let i = 1; i < leds.length; i++) d.push([Math.hypot(leds[i].x - leds[i - 1].x, leds[i].y - leds[i - 1].y), i]); d.sort((a, b) => a[0] - b[0]); const m = d[d.length >> 1][1]; s.calib = { a: [leds[m - 1].x, leds[m - 1].y], b: [leds[m].x, leds[m].y] }; }
+      S.sel = new Set([leds[0].id]); S.lastSel = leds[0].id;
+    });
+    toast(`Found ${r.blobs.length} lit LEDs and ordered them by nearest neighbour. Select the true first pixel to reorder from there.`);
+  }
+  function renderStrips() {
+    const list = $('stripList'); list.textContent = ''; const r = M.resolve(S.project);
+    $('stripCount').textContent = S.project.strips.length ? `${S.project.strips.length}, ${r.total} LEDs` : '';
+    if (!S.project.strips.length) list.append(h('p', { class: 'empty-note', text: 'One strip per data pin. A strip is created when you start drawing.' }));
+    S.project.strips.forEach((st, i) => {
+      const info = r.strips[i], on = st.id === S.activeStrip;
+      const name = h('input', { class: 'name', value: st.name, 'aria-label': 'Strip name' }); name.addEventListener('change', () => { const v = name.value.trim(); if (v) mutate(() => { st.name = v; }); });
+      const pin = h('input', { class: 'pin', type: 'number', min: 0, max: 48, value: st.pin, 'aria-label': 'Data pin (GPIO)', title: 'Data pin (GPIO)' }); pin.addEventListener('change', () => { const v = parseInt(pin.value, 10); if (v >= 0) mutate(() => { st.pin = v; }); });
+      const col = h('input', { type: 'color', value: st.color, class: 'dot', title: 'Colour', style: 'background:' + st.color + ';-webkit-appearance:none;appearance:none;overflow:hidden' }); col.addEventListener('change', () => mutate(() => { st.color = col.value; }));
+      const item = h('div', { class: 'item' + (on ? ' on' : ''), onclick: e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; S.activeStrip = st.id; renderSide(); draw(); } },
+        col, name, h('span', { class: 'meta' }, 'GPIO', pin),
+        h('div', { class: 'strip-more' }, h('span', { text: `${info.count} LEDs, ${info.count - info.live} dead, starts at ${info.start}` }), h('span', { style: 'flex:1' }),
+          h('button', { class: 'icon', title: 'Move up', text: '↑', onclick: () => moveItem(S.project.strips, i, -1) }), h('button', { class: 'icon', title: 'Move down', text: '↓', onclick: () => moveItem(S.project.strips, i, 1) }),
+          h('button', { class: 'icon', title: 'Reverse the data direction', text: '⇄', onclick: () => mutate(() => { st.leds.reverse(); }) }),
+          h('button', { class: 'icon', title: 'Delete strip', text: '✕', onclick: () => { if (st.leds.length && !confirm(`Delete "${st.name}" and its ${st.leds.length} LEDs?`)) return; mutate(() => { S.project.strips.splice(i, 1); if (S.activeStrip === st.id) S.activeStrip = null; }); } })));
+      list.append(item);
+    });
+  }
+  function moveItem(arr, i, d) { const j = i + d; if (j < 0 || j >= arr.length) return; mutate(() => { const [x] = arr.splice(i, 1); arr.splice(j, 0, x); }); }
+  function renderSel() {
+    const box = $('selBox'); box.textContent = ''; const runs = selRuns(), n = S.sel.size; $('selCount').textContent = n ? String(n) : '';
+    if (!n) { box.append(h('p', { class: 'note', text: 'Nothing selected.' })); return; }
+    const one = runs.length === 1 ? runs[0] : null;
+    box.append(h('p', { class: 'note', text: one ? (n === 1 ? `Pixel ${one.from} on ${one.strip.name}` : one.contiguous ? `${n} LEDs, pixels ${one.from} to ${one.to} on ${one.strip.name}` : `${n} LEDs on ${one.strip.name}`) : `${n} LEDs on ${runs.length} strips` }));
+    const flagged = [...S.sel].filter(id => { const e = index.get(id); return e && e.led.check; }).length;
+    if (flagged) box.append(h('p', { class: 'note warn' }, `${flagged} of these have a dashed ring: the tool was unsure how many LEDs are in that run. Count them against the photo. `, h('button', { class: 'btn tiny', text: 'Count is right', onclick: () => mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) delete e.led.check; } }) })));
+    box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: 'Mark dead', onclick: () => setDead(true) }), h('button', { class: 'btn tiny', text: 'Mark live', onclick: () => setDead(false) }), h('button', { class: 'btn tiny danger', text: 'Delete', onclick: deleteSel })));
+    if (one && one.contiguous && n >= 2) {
+      const c = h('input', { type: 'number', min: 2, step: 1, value: n, 'aria-label': 'LEDs in this run' });
+      box.append(h('label', null, 'LEDs in this run, ends stay put', h('div', { class: 'row3' }, c, h('button', { class: 'btn tiny', text: 'Respace', onclick: () => respace(parseInt(c.value, 10)) }), h('span', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: '−1', onclick: () => respace(n - 1) }), h('button', { class: 'btn tiny', text: '+1', onclick: () => respace(n + 1) })))));
+    }
+    const gs = S.project.groups, sel = h('select', { 'aria-label': 'Add to group' }, h('option', { value: '', text: 'Add to group…' }), gs.map((g, i) => h('option', { value: String(i), text: g.name })));
+    sel.addEventListener('change', () => { const g = gs[+sel.value]; if (!g) return; mutate(() => { for (const id of S.sel) if (!g.leds.includes(id)) g.leds.push(id); }); });
+    box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: 'New group', onclick: groupFromSel }), gs.length ? h('button', { class: 'btn tiny', text: 'Remove from groups', onclick: () => mutate(() => { for (const g of gs) g.leds = g.leds.filter(id => !S.sel.has(id)); }) }) : null));
+    if (gs.length) box.append(sel);
+    if (n === 1 && one) {
+      const led = one.strip.leds[one.from];
+      box.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!led.brk, onchange: e => mutate(() => { if (e.target.checked) led.brk = true; else delete led.brk; }) }), 'A new group starts at this pixel'));
+      box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: 'Reorder from here: nearest', title: 'Make this the first pixel and order the rest by nearest neighbour', onclick: () => reorderFrom(led, 'near') }), h('button', { class: 'btn tiny', text: 'Reorder: serpentine rows', onclick: () => reorderFrom(led, 'serp') })));
+    }
+  }
+  function renderGroups() {
+    const list = $('groupList'); list.textContent = ''; const gs = S.project.groups; $('groupCount').textContent = gs.length ? String(gs.length) : '';
+    if (!gs.length) list.append(h('p', { class: 'empty-note', text: 'A group is a named set of pixels that act together. Select LEDs and choose New group, or let Draw path group each row.' }));
+    gs.forEach((g, i) => {
+      const name = h('input', { class: 'name', value: g.name, 'aria-label': 'Group name' }); name.addEventListener('change', () => { const v = name.value.trim(); if (v) mutate(() => { g.name = v; delete g.auto; }); });
+      list.append(h('div', { class: 'item', onclick: e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; S.sel = new Set(g.leds); const f = index.get(g.leds[0]); if (f && S.view !== 'layout' && f.led.s !== S.view) setView(f.led.s); renderSide(); draw(); } },
+        h('span', { class: 'dot', style: 'background:' + g.color }), name,
+        h('span', { class: 'meta' }, `#${i}, ${g.leds.length} px`, h('button', { class: 'icon', title: 'Move up', text: '↑', onclick: () => moveItem(gs, i, -1) }), h('button', { class: 'icon', title: 'Move down', text: '↓', onclick: () => moveItem(gs, i, 1) }), h('button', { class: 'icon', title: 'Delete group (keeps the LEDs)', text: '✕', onclick: () => mutate(() => { gs.splice(i, 1); }) }))));
+    });
+  }
+
+  /* ----------------------------------------------------------------- photos */
+  function loadImage(blob) { return new Promise((res, rej) => { const url = URL.createObjectURL(blob), img = new Image(); img.onload = () => res(img); img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('That file could not be read as an image.')); }; img.src = url; }); }
+  async function addPhotos(files) {
+    let added = 0, first = null;
+    for (const f of files) {
+      if (!f.type.startsWith('image/') && !/\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)) continue;
+      try {
+        const img = await loadImage(f); let w = img.naturalWidth, hh = img.naturalHeight; const k = Math.min(1, 4096 / Math.max(w, hh)); w = Math.round(w * k); hh = Math.round(hh * k);
+        // Re-encode once so the stored photo is upright and the same pixels on every reload.
+        const c = document.createElement('canvas'); c.width = w; c.height = hh; c.getContext('2d').drawImage(img, 0, 0, w, hh);
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)), img2 = await loadImage(blob);
+        if (!added) pushUndo();
+        const s = M.newSheet(f.name.replace(/\.[^.]+$/, ''), w, hh, ''); s.file = `images/${s.id}.jpg`;
+        S.project.sheets.push(s); S.images.set(s.id, { blob, img: img2, prep: null }); first = first || s; added++;
+      } catch (err) { toast(`${f.name}: ${err.message}`); }
+    }
+    if (added) { autoLayout(); S.view = first.id; changed(); setView(first.id); if (!S.project.strips.some(st => st.leds.length)) setTool('path'); }
+    else if (files.length) toast('None of those files are images this browser can read. JPEG and PNG always work.');
+  }
+
+  /* ------------------------------------------------------------ save / open */
+  const downloadBlob = (name, blob) => { const a = h('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); };
+  async function projectBytes() {
+    const clean = JSON.parse(JSON.stringify(S.project));
+    const files = [{ name: 'project.json', data: JSON.stringify(clean, null, 1) }];
+    for (const s of S.project.sheets) { const im = S.images.get(s.id); if (im && im.blob) files.push({ name: s.file, data: new Uint8Array(await im.blob.arrayBuffer()) }); }
+    return Z.write(files);
+  }
+  async function saveProject() {
+    try {
+      const bytes = await projectBytes(), name = X.safe(S.project.name) + '.ledmap';
+      if (window.showSaveFilePicker && window.isSecureContext) {
+        try {
+          if (!S.fileHandle) S.fileHandle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'EasyLEDMap project', accept: { 'application/zip': ['.ledmap'] } }] });
+          const w = await S.fileHandle.createWritable(); await w.write(bytes); await w.close(); toast(`Saved ${S.fileHandle.name}`); markSaved(S.fileHandle.name); return;
+        } catch (err) { if (err && err.name === 'AbortError') return; S.fileHandle = null; }
+      }
+      downloadBlob(name, new Blob([bytes], { type: 'application/zip' })); toast(`Saved ${name} to your downloads.`); markSaved(name);
+    } catch (err) { toast('Could not save: ' + err.message); }
+  }
+  function markSaved(name) { S.savedAt = Date.now(); $('saveState').textContent = `Saved to ${name} at ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; }
+  async function openProjectFile(file) {
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer()); let project, entries = [];
+      if (buf[0] === 0x50 && buf[1] === 0x4b) { entries = await Z.read(buf); const pj = entries.find(e => e.name === 'project.json'); if (!pj) throw new Error('This zip has no project.json inside, so it is not an EasyLEDMap project.'); project = JSON.parse(new TextDecoder().decode(pj.data)); }
+      else project = JSON.parse(new TextDecoder().decode(buf));
+      await loadProject(M.validate(project), async s => { const e = entries.find(x => x.name === s.file); return e ? new Blob([e.data], { type: 'image/jpeg' }) : null; });
+      S.fileHandle = null; toast(`Opened ${file.name}`); $('saveState').textContent = `Opened ${file.name}`;
+    } catch (err) { toast('Could not open that file. ' + (err instanceof SyntaxError ? 'It is not a valid project file.' : err.message)); }
+  }
+  async function loadProject(project, getBlob) {
+    const images = new Map(); let missing = 0;
+    for (const s of project.sheets) { const blob = await getBlob(s); if (blob) { try { images.set(s.id, { blob, img: await loadImage(blob), prep: null }); } catch (_) { missing++; } } else missing++; }
+    S.project = project; S.images = images; S.undo = []; S.redo = []; S.sel.clear(); S.cams = {}; S.path = null; S.calib = null; S.flatEdit = null; S.preview = null;
+    S.view = project.sheets.length ? project.sheets[0].id : null; S.activeStrip = project.strips.length ? project.strips[0].id : null;
+    $('projectName').value = project.name; syncSetup(); changed(); setTool('select'); renderTabs();
+    if (missing) toast(`${missing} photo(s) are missing from this file. The map is intact and you can keep editing.`);
+  }
+  function newProject() {
+    if (S.project.sheets.length && !confirm('Start a new project? Save first if you want to keep this one.')) return;
+    loadProject(M.newProject(), async () => null); S.fileHandle = null; $('saveState').textContent = '';
+  }
+
+  /* --------------------------------------------------------------- autosave */
+  let saveTimer = 0, db = null;
+  function idb() { return new Promise((res, rej) => { if (db) return res(db); const r = indexedDB.open('led-mapper', 1); /* name predates the rename; kept so earlier autosaves still load */ r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { db = r.result; res(db); }; r.onerror = () => rej(r.error); }); }
+  function autosaveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(autosave, 1200); }
+  async function autosave() {
+    try {
+      const d = await idb(), clean = JSON.stringify(S.project), imgs = [...S.images].map(([id, im]) => ({ id, blob: im.blob }));
+      await new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put({ json: clean, imgs, at: Date.now() }, 'autosave'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      if (!S.savedAt || Date.now() - S.savedAt > 4000) { const st = $('saveState'); if (S.project.sheets.length && !/^Saved to/.test(st.textContent)) st.textContent = 'Kept in this browser. Save project to make a file.'; else if (S.project.sheets.length) st.textContent = st.textContent.replace(/^Saved to/, 'Changed since saving to').replace(/ at .*/, ''); }
+    } catch (_) { /* private mode or blocked storage: the Save button still works */ }
+  }
+  async function restoreAutosave() {
+    try {
+      const d = await idb(), rec = await new Promise((res, rej) => { const r = d.transaction('kv').objectStore('kv').get('autosave'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+      if (!rec || !rec.json) return false; const project = M.validate(JSON.parse(rec.json)); if (!project.sheets.length) return false;
+      await loadProject(project, async s => { const e = (rec.imgs || []).find(x => x.id === s.id); return e ? e.blob : null; });
+      toast('Picked up where you left off.', 'Start new', newProject); return true;
+    } catch (_) { return false; }
+  }
+
+  /* ----------------------------------------------------------------- export */
+  let exportResult = null;
+  function renderLayoutPng() {
+    const r = M.resolve(S.project), n = M.normalise(r.leds, { origin: 'corner', yUp: false, keepAspect: true, lo: 0, hi: 1 });
+    const size = 1400, pad = 40, W = size, H = Math.max(120, Math.round((size - pad * 2) / Math.max(n.aspect, 0.05)) + pad * 2), c = document.createElement('canvas'); c.width = W; c.height = Math.min(H, 4000);
+    const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height);
+    const sc = Math.min((W - pad * 2), (c.height - pad * 2) * Math.max(n.aspect, 1e-6)) , k = n.aspect >= 1 ? (W - pad * 2) : (c.height - pad * 2);
+    const rad = Math.max(2, Math.min(9, k / Math.sqrt(Math.max(1, r.total)) * 0.22)); void sc;
+    r.leds.forEach(l => { const px = pad + n.u[l.index] * k, py = pad + n.v[l.index] * k; x.beginPath(); x.arc(px, py, rad, 0, 7); if (l.dead) { x.strokeStyle = '#555'; x.lineWidth = 1; x.stroke(); } else { const g = l.groups.length ? S.project.groups[l.groups[0]] : null; x.fillStyle = g ? g.color : S.project.strips[l.strip].color; x.fill(); } });
+    return new Promise(res => c.toBlob(b => b.arrayBuffer().then(a => res(new Uint8Array(a))), 'image/png'));
+  }
+  function optRow(o, key, label, type, extra) {
+    if (type === 'check') return h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!o[key], onchange: e => { o[key] = e.target.checked; exportChanged(); } }), label);
+    if (type === 'select') { const s = h('select', null, extra.map(([v, t]) => h('option', { value: v, text: t }))); s.value = String(o[key]); s.addEventListener('change', () => { let v = s.value; if (v === 'true' || v === 'false') v = v === 'true'; o[key] = v; if (extra.onset) extra.onset(v); exportChanged(); }); return h('label', null, label, s); }
+    const i = h('input', { type: 'number', step: 'any', value: o[key] }); i.addEventListener('change', () => { const v = parseFloat(i.value); if (isFinite(v)) { o[key] = v; exportChanged(); } }); return h('label', null, label, i);
+  }
+  function exportChanged() { autosaveSoon(); renderExport(); }
+  async function renderExport() {
+    const t = S.exportTarget, o = S.project.exports[t], f = $('exportForm'); f.textContent = '';
+    document.querySelectorAll('#exportTarget button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    const coords = [optRow(o, 'origin', 'Origin', 'select', [['corner', o.yUp ? 'Bottom left corner' : 'Top left corner'], ['center', 'Centre of the layout']]), optRow(o, 'yUp', 'Y axis points', 'select', [['false', 'Down, like an image'], ['true', 'Up, like a graph']]), optRow(o, 'keepAspect', 'Keep proportions (longest side fills the range)', 'check'), optRow(o, 'includeDeadInBounds', 'Count dead pixels when fitting the range', 'check')];
+    if (t === 'wled') {
+      f.append(optRow(o, 'order', 'Pixel order effects will see', 'select', [['wiring', 'Wiring order, dead pixels skipped'], ['groups', 'Packed by group, in group list order']]));
+      f.append(optRow(o, 'coordType', 'Position numbers in the header', 'select', [['uint8', 'uint8_t, 0 to 255'], ['uint16', 'uint16_t, 0 to 65535'], ['int16', 'int16_t, -32768 to 32767']]), ...coords);
+      f.append(optRow(o, 'grid', 'Also write a 2D matrix map (snaps LEDs to a grid)', 'check')); if (o.grid) f.append(optRow(o, 'gridWidth', 'Grid width in cells, 0 picks one from the LED spacing', 'number'));
+    } else if (t === 'fastled') {
+      const ct = [['uint8', 'uint8_t'], ['uint16', 'uint16_t'], ['int16', 'int16_t'], ['int8', 'int8_t'], ['float', 'float']]; ct.onset = v => { const T = M.INT_TYPES[v]; o.lo = T.lo; o.hi = T.hi; };
+      f.append(optRow(o, 'coordType', 'Number type', 'select', ct), h('div', { class: 'row2' }, optRow(o, 'lo', 'Range from', 'number'), optRow(o, 'hi', 'to', 'number')), ...coords);
+      f.append(optRow(o, 'grid', 'Add an XY(x, y) grid lookup', 'check')); if (o.grid) f.append(optRow(o, 'gridWidth', 'Grid width in cells, 0 picks one from the LED spacing', 'number'));
+    } else {
+      f.append(h('div', { class: 'row2' }, optRow(o, 'lo', 'Range from', 'number'), optRow(o, 'hi', 'to', 'number')), ...coords);
+      f.append(h('div', { class: 'row2' }, optRow(o, 'universeSize', 'Pixels per universe', 'number'), optRow(o, 'firstUniverse', 'First universe', 'number')), optRow(o, 'stripsStartUniverse', 'Each strip starts on a new universe', 'check'));
+    }
+    let res; try { res = X[t === 'td' ? 'touchdesigner' : t](S.project); } catch (err) { res = { files: [], warnings: ['Export failed: ' + err.message], summary: { total: 0, live: 0, groups: 0 } }; }
+    for (const file of res.files) if (file.render === 'layout') { file.bytes = await renderLayoutPng(); }
+    exportResult = res;
+    const warn = $('exportWarn'); warn.textContent = '';
+    if (!res.summary.total) warn.append(h('p', { class: 'note warn', text: 'There are no LEDs mapped yet, so these files are empty.' }));
+    const checks = S.project.strips.reduce((a, st) => a + st.leds.filter(l => l.check).length, 0); if (checks) warn.append(h('p', { class: 'note warn', text: `${checks} LED(s) are still flagged with a dashed ring because the tool was unsure of the count there. Check those runs before you trust the indexes.` }));
+    for (const w of res.warnings) warn.append(h('p', { class: 'note warn', text: w }));
+    $('exportSummary').textContent = `${res.summary.total} LEDs on the wire, ${res.summary.live} mapped, ${res.summary.groups} groups.`;
+    const tabs = $('fileTabs'); tabs.textContent = ''; if (S.exportFile >= res.files.length) S.exportFile = 0;
+    res.files.forEach((file, i) => tabs.append(h('button', { class: i === S.exportFile ? 'on' : '', text: file.name, onclick: () => { S.exportFile = i; showFile(); tabs.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === i)); } })));
+    showFile();
+  }
+  function showFile() {
+    const pre = $('filePreview'), file = exportResult && exportResult.files[S.exportFile]; pre.textContent = ''; if (!file) return;
+    if (file.bytes) { const img = h('img', { alt: file.name, src: URL.createObjectURL(new Blob([file.bytes], { type: 'image/png' })) }); if (file.name.includes('uv')) img.style.cssText = 'width:100%;height:28px;image-rendering:pixelated'; pre.append(img); $('btnCopyFile').disabled = true; }
+    else { pre.textContent = file.text.length > 60000 ? file.text.slice(0, 60000) + '\n… preview cut here. The download has the whole file.' : file.text; $('btnCopyFile').disabled = false; }
+  }
+  const fileBlob = file => file.bytes ? new Blob([file.bytes], { type: 'image/png' }) : new Blob([file.text], { type: 'text/plain' });
+
+  /* ------------------------------------------------------------------ wiring */
+  function init() {
+    const cs = $('fChipset'); for (const k in M.CHIPSETS) cs.append(h('option', { value: k, text: M.CHIPSETS[k].label }));
+    cs.addEventListener('change', () => mutate(() => { const c = M.CHIPSETS[cs.value], s = S.project.setup; s.chipset = cs.value; s.voltage = c.voltage; s.maPerPixel = c.ma; s.colorOrder = c.order; syncSetup(); }));
+    const bind = (id, key, parse) => $(id).addEventListener('change', () => { const v = parse($(id).value); mutate(() => { S.project.setup[key] = v; }); syncSetup(); });
+    const pos = d => v => { const n = parseFloat(v); return isFinite(n) && n >= 0 ? n : d; };
+    bind('fVoltage', 'voltage', pos(5)); bind('fMa', 'maPerPixel', pos(0)); bind('fOrder', 'colorOrder', v => v); bind('fLpm', 'ledsPerMeter', v => Math.max(1, pos(60)(v))); bind('fPsu', 'psuAmps', pos(0));
+    $('projectName').addEventListener('change', () => { const v = $('projectName').value.trim() || 'Untitled map'; mutate(() => { S.project.name = v; }); $('projectName').value = v; });
+    document.querySelectorAll('.tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+    $('btnFit').onclick = fit; $('btnZoomIn').onclick = () => zoomAt(cw / 2, ch / 2, 1.4); $('btnZoomOut').onclick = () => zoomAt(cw / 2, ch / 2, 1 / 1.4);
+    $('btnUndo').onclick = undo; $('btnRedo').onclick = redo; $('btnSave').onclick = saveProject; $('btnNew').onclick = newProject;
+    $('btnOpen').onclick = $('btnOpen2').onclick = () => $('fileProject').click(); $('btnAddFirst').onclick = () => $('fileImages').click();
+    $('fileImages').addEventListener('change', e => { addPhotos([...e.target.files]); e.target.value = ''; });
+    $('fileProject').addEventListener('change', e => { if (e.target.files[0]) openProjectFile(e.target.files[0]); e.target.value = ''; });
+    $('btnAddStrip').onclick = () => { if (S.path) finishPath(); mutate(() => { const st = M.newStrip(S.project); S.project.strips.push(st); S.activeStrip = st.id; }); if (S.view && S.view !== 'layout') setTool('path'); };
+    $('btnGroupRuns').onclick = () => { const st = activeStrip(false); if (!st || !st.leds.length) { toast('Select a strip with LEDs first.'); return; } regroupStrip(st, true); S.colorBy = 'group'; $('colorBy').value = 'group'; draw(); toast(`Grouped each run of live pixels on ${st.name}.`); };
+    $('btnClearGroups').onclick = () => { if (S.project.groups.length && confirm(`Remove all ${S.project.groups.length} groups? The LEDs stay.`)) mutate(() => { S.project.groups = []; }); };
+    $('photoDim').addEventListener('input', e => { S.photoDim = e.target.value / 100; draw(); });
+    $('colorBy').addEventListener('change', e => { S.colorBy = e.target.value; draw(); }); $('showLabels').addEventListener('change', e => { S.showLabels = e.target.checked; draw(); });
+    $('optRowsTurns').addEventListener('change', updateHint);
+    $('btnLegMinus').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M - 1); }; $('btnLegPlus').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M + 1); };
+    $('btnLegJump').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(1, 'turn'); };
+    $('btnLegType').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M, l.kind === 'row' ? 'turn' : 'row'); }; $('btnLegUndo').onclick = removeLeg; $('btnPathDone').onclick = finishPath;
+    $('btnExport').onclick = () => { if (S.path) finishPath(); $('dlgExport').showModal(); renderExport(); };
+    document.querySelectorAll('#exportTarget button').forEach(b => b.addEventListener('click', () => { S.exportTarget = b.dataset.t; S.exportFile = 0; renderExport(); }));
+    $('btnCopyFile').onclick = async () => { const f = exportResult && exportResult.files[S.exportFile]; if (f && f.text) { try { await navigator.clipboard.writeText(f.text); toast(`Copied ${f.name}`); } catch (_) { toast('Copy was blocked by the browser. Use Download instead.'); } } };
+    $('btnDownloadFile').onclick = () => { const f = exportResult && exportResult.files[S.exportFile]; if (f) downloadBlob(f.name, fileBlob(f)); };
+    $('btnDownloadAll').onclick = async () => { if (!exportResult) return; const files = []; for (const f of exportResult.files) files.push({ name: f.name, data: f.bytes || f.text }); const name = `${X.safe(S.project.name)}_${S.exportTarget === 'td' ? 'touchdesigner' : S.exportTarget}.zip`; downloadBlob(name, new Blob([Z.write(files)], { type: 'application/zip' })); toast(`Downloaded ${name}`); };
+    // drag and drop
+    const wrap = document.body, emp = $('empty');
+    wrap.addEventListener('dragover', e => { e.preventDefault(); emp.classList.add('drag'); }); wrap.addEventListener('dragleave', () => emp.classList.remove('drag'));
+    wrap.addEventListener('drop', e => { e.preventDefault(); emp.classList.remove('drag'); const files = [...e.dataTransfer.files]; const proj = files.find(f => /\.(ledmap|zip|json)$/i.test(f.name)); if (proj) openProjectFile(proj); else addPhotos(files); });
+    new ResizeObserver(resize).observe($('canvasWrap'));
+    window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); autosave(); });
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
+    syncSetup(); changed(); setTool('select'); resize();
+    if (!/[?&]fresh\b/.test(location.search)) restoreAutosave();
+  }
+  window.LM.app.api = { addPhotos, openProjectFile, saveProject, projectBytes, setTool, setView, fit, toScreen, fromScreen, legPoints, finishPath, loadProject, renderExport, getExport: () => exportResult };
+  init();
+})();
+</script>
+</body>
+</html>

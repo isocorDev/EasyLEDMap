@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EasyLEDMap</title>
+<meta name="description" content="Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.">
+<meta name="theme-color" content="#1d2327">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand" aria-label="EasyLEDMap"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>EasyLEDMap</span></div>
+  <input id="projectName" class="project-name" aria-label="Project name" spellcheck="false" value="Untitled map">
+  <span id="saveState" class="save-state" aria-live="polite"></span>
+  <div class="bar-actions">
+    <button id="btnUndo" class="btn ghost" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button id="btnRedo" class="btn ghost" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+    <span class="sep"></span>
+    <button id="btnNew" class="btn ghost">New</button>
+    <button id="btnOpen" class="btn ghost">Open</button>
+    <button id="btnSave" class="btn">Save project</button>
+    <button id="btnExport" class="btn primary">Export</button>
+  </div>
+</header>
+
+<main class="work">
+  <nav class="rail" aria-label="Tools">
+    <button class="tool" data-tool="select" title="Select and move LEDs (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2 4 7-3 1.5-4-7-5 4z"/></svg><span>Select</span></button>
+    <button class="tool" data-tool="path" title="Draw the path the data takes (P)"><svg viewBox="0 0 24 24"><path d="M4 18h9V7h7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="18" r="2.5"/><circle cx="13" cy="18" r="2.5"/><circle cx="13" cy="7" r="2.5"/><circle cx="20" cy="7" r="2.5"/></svg><span>Draw path</span></button>
+    <button class="tool" data-tool="add" title="Add single LEDs (A)"><svg viewBox="0 0 24 24"><circle cx="10" cy="14" r="6"/><path d="M19 2v8M15 6h8" stroke="currentColor" stroke-width="2"/></svg><span>Add LED</span></button>
+    <button class="tool" data-tool="pan" title="Pan (H, or hold Space)"><svg viewBox="0 0 24 24"><path d="M12 2l3 4h-2v5h5V9l4 3-4 3v-2h-5v5h2l-3 4-3-4h2v-5H6v2l-4-3 4-3v2h5V6H9z"/></svg><span>Pan</span></button>
+    <span class="rail-gap"></span>
+    <button class="tool small" id="btnFit" title="Fit to window (F)"><span>Fit</span></button>
+    <button class="tool small" id="btnZoomIn" title="Zoom in (+)"><span>+</span></button>
+    <button class="tool small" id="btnZoomOut" title="Zoom out (-)"><span>&minus;</span></button>
+  </nav>
+
+  <section class="stage">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="canvas" tabindex="0" aria-label="Mapping view"></canvas>
+      <div class="empty" id="empty">
+        <div class="empty-card">
+          <h1>Map your LEDs from a photo</h1>
+          <p>Add a photo of the strips, then trace the path the data takes. EasyLEDMap counts and places the pixels along it and writes the map for WLED, FastLED or TouchDesigner.</p>
+          <div class="empty-actions">
+            <button class="btn primary big" id="btnAddFirst">Add photos</button>
+            <button class="btn big" id="btnOpen2">Open a project</button>
+          </div>
+          <p class="fine">You can also drop photos or a .ledmap file anywhere on this page. Nothing is uploaded: everything stays on this computer.</p>
+        </div>
+      </div>
+      <div class="pathopts" id="pathOpts" hidden>
+        <label title="Legs alternate: a row of live pixels, then a turn whose in-between pixels are dead"><input type="checkbox" id="optRowsTurns" checked> Rows and turns</label>
+        <label title="When you finish, each row becomes its own group"><input type="checkbox" id="optGroupRows" checked> Group each row</label>
+        <span class="leg" id="legInfo"></span>
+        <button class="btn tiny" id="btnLegMinus" title="One fewer LED on the last leg ([)">&minus;1</button>
+        <button class="btn tiny" id="btnLegPlus" title="One more LED on the last leg (])">+1</button>
+        <button class="btn tiny" id="btnLegType" title="Switch the last leg between row and turn (T)">Row / turn</button>
+        <button class="btn tiny" id="btnLegJump" title="The last click was a wire jump: no LEDs between the two points (J)">Wire jump</button>
+        <button class="btn tiny" id="btnLegUndo" title="Remove the last leg (Backspace)">Remove leg</button>
+        <button class="btn tiny primary" id="btnPathDone" title="Finish (Enter)">Finish</button>
+      </div>
+      <div class="viewopts" id="viewOpts">
+        <label title="Dim the photo so the map reads clearly">Photo <input type="range" id="photoDim" min="0" max="100" value="100"></label>
+        <label>Colour by <select id="colorBy"><option value="strip">Strip</option><option value="group">Group</option></select></label>
+        <label><input type="checkbox" id="showLabels" checked> Numbers</label>
+      </div>
+      <div class="hint" id="hint" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <aside class="side" id="side">
+    <details class="sec" id="secSetup" open>
+      <summary>Setup</summary>
+      <div class="form">
+        <label>LED chipset<select id="fChipset"></select></label>
+        <div class="row2">
+          <label>Voltage<span class="unit" data-u="V"><input id="fVoltage" type="number" min="1" step="0.1" inputmode="decimal"></span></label>
+          <label>Current per pixel<span class="unit" data-u="mA"><input id="fMa" type="number" min="0" step="1" inputmode="decimal"></span></label>
+        </div>
+        <div class="row2">
+          <label>Colour order<select id="fOrder"><option>GRB</option><option>RGB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select></label>
+          <label>LEDs per metre<input id="fLpm" type="number" min="1" step="1" inputmode="numeric"></label>
+        </div>
+        <label>Power supply, if chosen<span class="unit" data-u="A"><input id="fPsu" type="number" min="0" step="0.5" inputmode="decimal" placeholder="optional"></span></label>
+        <div class="power" id="powerBox"></div>
+      </div>
+    </details>
+
+    <details class="sec" id="secPhoto" open>
+      <summary>This photo</summary>
+      <div class="form" id="photoForm"></div>
+    </details>
+
+    <details class="sec" id="secStrips" open>
+      <summary>Strips <span class="count" id="stripCount"></span></summary>
+      <div id="stripList" class="list"></div>
+      <div class="sec-actions"><button class="btn tiny" id="btnAddStrip">Add strip</button></div>
+    </details>
+
+    <details class="sec" id="secSel" open>
+      <summary>Selection <span class="count" id="selCount"></span></summary>
+      <div id="selBox" class="form"></div>
+    </details>
+
+    <details class="sec" id="secGroups" open>
+      <summary>Groups <span class="count" id="groupCount"></span></summary>
+      <div id="groupList" class="list groups"></div>
+      <div class="sec-actions">
+        <button class="btn tiny" id="btnGroupRuns" title="Make one group from every unbroken run of live pixels on the active strip">Group each run</button>
+        <button class="btn tiny" id="btnClearGroups">Clear groups</button>
+      </div>
+    </details>
+  </aside>
+</main>
+
+<dialog id="dlgExport" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h2>Export</h2><button class="btn ghost" value="close" aria-label="Close">Close</button></form>
+  <div class="export">
+    <div class="export-opts">
+      <div class="seg" id="exportTarget" role="tablist">
+        <button data-t="wled" class="on">WLED</button><button data-t="fastled">FastLED</button><button data-t="td">TouchDesigner</button>
+      </div>
+      <div id="exportForm" class="form"></div>
+      <div id="exportWarn" class="warn-list"></div>
+      <div class="export-go">
+        <button class="btn primary" id="btnDownloadAll">Download all as zip</button>
+        <span class="fine" id="exportSummary"></span>
+      </div>
+    </div>
+    <div class="export-files">
+      <div class="file-tabs" id="fileTabs"></div>
+      <pre id="filePreview" class="preview" tabindex="0"></pre>
+      <div class="file-actions"><button class="btn tiny" id="btnCopyFile">Copy</button><button class="btn tiny" id="btnDownloadFile">Download this file</button></div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileImages" accept="image/*" multiple hidden>
+<input type="file" id="fileProject" accept=".ledmap,.zip,.json,application/zip,application/json" hidden>
+
+<script src="js/geom.js"></script>
+<script src="js/model.js"></script>
+<script src="js/detect.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/exporters.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
