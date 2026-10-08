@@ -1,0 +1,4 @@
+node_modules/
+test/shots/
+*.ledmap
+.DS_Store

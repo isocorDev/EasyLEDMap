@@ -1,0 +1,11 @@
+{
+  "name": "LED Mapper",
+  "short_name": "LED Mapper",
+  "description": "Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#22282b",
+  "theme_color": "#1d2327",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
