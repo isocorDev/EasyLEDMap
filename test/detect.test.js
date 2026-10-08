@@ -69,19 +69,23 @@ const near = (b, p, tol) => Math.hypot(b.x - p[0], b.y - p[1]) <= (tol || 3);
 for (const lightsOn of [true, false]) {
   const truth = serpentine(5, 12, 60, 50, 30, 100), prep = litScene(460, 520, [truth], { lightsOn });
   const res = D.detectLit(prep); assert.strictEqual(res.mode, 'colour'); assert.strictEqual(res.blobs.length, truth.length, `lights ${lightsOn ? 'on' : 'off'}: found ${res.blobs.length} of ${truth.length}`);
-  const ch = D.chainByColour(res.blobs); assert.strictEqual(ch.chains.length, 1); assert.strictEqual(ch.chains[0].length, truth.length);
+  const ch = D.chainByColour(res.blobs, { pitch: res.pitch }); assert.strictEqual(ch.chains.length, 1); assert.strictEqual(ch.chains[0].length, truth.length);
   ch.chains[0].forEach((e, i) => assert.ok(near(res.blobs[e], truth[i]), `LED ${i} is in wire order`));
 }
 { // one LED did not light: the walk bridges it and leaves a placeholder at the right index
-  const truth = serpentine(4, 10, 60, 50, 30, 100), prep = litScene(420, 420, [truth], { skip: new Set(['0:17']) }), res = D.detectLit(prep), ch = D.chainByColour(res.blobs);
+  const truth = serpentine(4, 10, 60, 50, 30, 100), prep = litScene(420, 420, [truth], { skip: new Set(['0:17']) }), res = D.detectLit(prep), ch = D.chainByColour(res.blobs, { pitch: res.pitch });
   assert.strictEqual(res.blobs.length, truth.length - 1); assert.strictEqual(ch.chains[0].length, truth.length); assert.ok(ch.chains[0][17].gap, 'gap marked at index 17');
   assert.ok(Math.hypot(ch.chains[0][17].gap[0] - truth[17][0], ch.chains[0][17].gap[1] - truth[17][1]) < 6); assert.ok(near(res.blobs[ch.chains[0][18]], truth[18]));
 }
-{ // two strips in one photo, the second starting mid-cycle; asking for 2 keeps them apart, asking for 1 joins them in order
+{ // two strips in one photo, the second starting mid-cycle: each is found on its own, in its own wire order
   const a = serpentine(3, 10, 50, 50, 30, 100), b = serpentine(3, 8, 480, 60, 30, 100), prep = litScene(780, 330, [a, b], { offset: [0, a.length % 3] }), res = D.detectLit(prep);
   assert.strictEqual(res.blobs.length, a.length + b.length);
-  const two = D.chainByColour(res.blobs, { strips: 2 }); assert.deepStrictEqual(two.chains.map(c => c.length), [a.length, b.length]); assert.ok(near(res.blobs[two.chains[1][0]], b[0]), 'second strip starts at its own first LED');
-  const one = D.chainByColour(res.blobs, { strips: 1 }), flat = one.chains[0].filter(e => typeof e === 'number'); assert.strictEqual(one.chains.length, 1); assert.strictEqual(flat.length, a.length + b.length); assert.ok(near(res.blobs[flat[a.length]], b[0]), 'joined across the wire jump in colour order');
+  const two = D.chainByColour(res.blobs, { pitch: res.pitch }); assert.deepStrictEqual(two.chains.map(c => c.length), [a.length, b.length]); assert.ok(near(res.blobs[two.chains[1][0]], b[0]), 'second strip starts at its own first LED');
+}
+{ // a short piece reached by a wire jump joins the end of the strip, and the join is marked
+  const a = serpentine(2, 10, 60, 50, 30, 100), tail = [[200, 250], [170, 250], [140, 250]], all = a.concat(tail), prep = litScene(420, 320, [all]), res = D.detectLit(prep), ch = D.chainByColour(res.blobs, { pitch: res.pitch });
+  assert.strictEqual(ch.chains.length, 1); const c = ch.chains[0]; assert.strictEqual(c.filter(e => typeof e === 'number').length, all.length); assert.ok(c[a.length].join, 'join marked where the wire jumps');
+  assert.ok(near(res.blobs[c[c.length - 1]], tail[2]));
 }
 { // plain white LEDs still work, by brightness
   const w = 300, h = 120, rgba = new Uint8Array(w * h * 4).fill(18); for (let c = 0; c < 9; c++) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const i = ((60 + dy) * w + 30 + c * 30 + dx) * 4; rgba[i] = rgba[i + 1] = rgba[i + 2] = 250; }

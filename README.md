@@ -36,8 +36,13 @@ squeezed turns do not matter.
 4. Check the guess. Short runs at the ends of a panel are the likeliest to be wrong. Select a
    run and use Mark dead or Mark live, or run **Find rows and turns** again after fixing.
 
-If more than one strip is lit in the photo, set "Separate strips lit in this photo" under
-Photographing lit LEDs before you choose Find lit LEDs.
+Each strip in the photo is found on its own. A strip that runs off the edge of the photo is
+labelled so: delete it if it belongs to another photo. Strips take the photo's name, so name
+your photos first.
+
+A phone camera shows red LEDs as orange, blue as cyan with a blue halo, and green as pale mint.
+The tool expects that. Tape, connectors and reflections that happen to be orange or blue are
+left out when they are much larger than an LED.
 
 Lit in a single colour instead? The LEDs are still found, but ordered by nearest neighbour.
 Select the true first pixel and choose a reorder button.
@@ -140,7 +145,8 @@ run on hardware by the tool's authors for every configuration: read it before yo
 - **Unlit strips are not found automatically.** You trace the path and the tool counts the
   LEDs between your clicks. On S-type strips the spacing varies and turns get squeezed, so
   counts in turns are often off. A lit photo avoids all of that.
-- Lit detection has been tested on generated photos, not yet on a wide range of real ones.
+- Lit detection has been tuned on one set of real photos (white S-type strip, phone camera,
+  room lights on). Other strips, cameras and lighting may need the thresholds adjusted.
 - Rows and turns are guessed from the shape of the strip. It is a first pass to correct.
 - Flattened photos show as LED positions only in the Layout tab. The photo is not warped.
 - No snapping of two photos of one panel onto each other. Align them by hand in Layout.

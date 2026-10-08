@@ -39,7 +39,8 @@
   function reindex() {
     index = new Map();
     S.project.strips.forEach(st => st.leds.forEach((l, k) => index.set(l.id, { strip: st, k, led: l })));
-    for (const g of S.project.groups) g.leds = g.leds.filter(id => index.has(id));
+    // A group whose LEDs have all been deleted goes with them.
+    S.project.groups = S.project.groups.filter(g => { const had = g.leds.length; g.leds = g.leds.filter(id => index.has(id)); return !(had > 0 && g.leds.length === 0); });
     for (const id of [...S.sel]) if (!index.has(id)) S.sel.delete(id);
     if (S.lastSel && !index.has(S.lastSel)) S.lastSel = null;
   }
@@ -666,10 +667,8 @@
       h('button', { class: 'btn tiny', text: s.calib ? 'Set spacing again' : 'Set spacing', onclick: beginCalib }),
       h('button', { class: 'btn tiny', text: s.flat ? 'Edit flattening' : 'Flatten photo', title: 'Correct for the camera angle using a rectangle of known size', onclick: () => { const m = Math.min(s.w, s.h) * 0.25, cx = s.w / 2, cy = s.h / 2; S.flatEdit = s.flat ? { quad: s.flat.quad.map(p => [p[0], p[1]]), w: s.flat.w, h: s.flat.h } : { quad: [[cx - m, cy - m], [cx + m, cy - m], [cx + m, cy + m], [cx - m, cy + m]], w: 12, h: 12 }; if (S.path) finishPath(); S.tool = 'select'; setTool('select'); renderSide(); draw(); } }),
       h('button', { class: 'btn tiny', text: 'Find lit LEDs', title: 'For photos taken with the LEDs switched on', onclick: () => findLit(s) })));
-    const ls = h('input', { type: 'number', min: 1, max: 16, step: 1, value: s.litStrips || 1, 'aria-label': 'Strips in this photo' }); ls.addEventListener('change', () => { const v = Math.max(1, Math.min(16, parseInt(ls.value, 10) || 1)); s.litStrips = v; ls.value = v; autosaveSoon(); });
     box.append(h('details', { class: 'tip' }, h('summary', { text: 'Photographing lit LEDs' }),
-      h('p', { class: 'note', text: 'Light the strip in a repeating red, green, blue cycle and the tool reads the wiring order from the photo. In WLED: effect Solid Pattern Tri, colours red, green and blue, Size slider at its lowest, brightness low. Lower the exposure until each LED is a separate dot.' }),
-      h('label', null, 'Separate strips lit in this photo', ls)));
+      h('p', { class: 'note', text: 'Light the strip in a repeating red, green, blue cycle and the tool reads the wiring order from the photo. In WLED: effect Solid Pattern Tri, colours red, green and blue, Size slider at its lowest, brightness low. Lower the exposure until each LED is a separate dot. Each strip in the photo is found on its own.' })));
     if (!s.flat) box.append(h('p', { class: 'note', text: 'Shot at an angle? Flatten the photo first so spacing stays even across it.' }));
     box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny danger', text: 'Remove photo', onclick: () => removeSheet(s) })));
     void pw;
@@ -693,13 +692,20 @@
     let msg = '';
     mutate(() => {
       if (here) { for (const st of S.project.strips) st.leds = st.leds.filter(l => l.s !== s.id); S.project.strips = S.project.strips.filter(st => st.leds.length || st.id === S.activeStrip); }
-      const fresh = [];
-      const takeStrip = () => { let st = activeStrip(false); if (!st || st.leds.length || fresh.includes(st)) { st = M.newStrip(S.project); S.project.strips.push(st); } S.activeStrip = st.id; fresh.push(st); return st; };
+      const fresh = [], cut = [];
+      const takeStrip = () => {
+        let st = activeStrip(false); if (!st || st.leds.length || fresh.includes(st)) { st = M.newStrip(S.project); S.project.strips.push(st); }
+        // Name the strip after its photo, unless the photo still has a camera file name.
+        if (/^Strip \d+$/.test(st.name) && !/^(img|dsc|pxl|image|photo)?[ _-]?\d*$/i.test(s.name) && !/^[0-9a-f]{6,}/i.test(s.name)) { const base = s.name, taken = new Set(S.project.strips.map(x => x.name)); let nm = base, k = 2; while (taken.has(nm)) nm = `${base} ${k++}`; st.name = nm; }
+        S.activeStrip = st.id; fresh.push(st); return st;
+      };
       let flagged = 0;
       if (cyc) {
-        const ch = D.chainByColour(r.blobs, { strips: Math.max(1, Math.round(+s.litStrips || 1)) });
+        const ch = D.chainByColour(r.blobs, { pitch: r.pitch });
+        const edge = (ch.pitch || 20) * 1.3, offPhoto = e => typeof e === 'number' && (r.blobs[e].x < edge || r.blobs[e].y < edge || r.blobs[e].x > s.w - edge || r.blobs[e].y > s.h - edge);
         for (const chain of ch.chains) {
           const st = takeStrip(); let flagNext = false;
+          if (offPhoto(chain[0]) || offPhoto(chain[chain.length - 1])) { st.name += ' (runs off the photo)'; cut.push(st); }
           for (const e of chain) {
             if (typeof e === 'number') { st.leds.push(M.newLed(s.id, r.blobs[e].x, r.blobs[e].y, flagNext ? { check: true } : null)); if (flagNext) flagged++; flagNext = false; }
             else if (e.gap) { st.leds.push(M.newLed(s.id, e.gap[0], e.gap[1], { check: true, f: 1 })); flagged++; }
@@ -707,7 +713,7 @@
           }
           st.done = true;
         }
-        msg = `Found ${total} lit LEDs and read the wiring order from the colour cycle: ${ch.chains.map(c => c.filter(e => !e.join).length).join(' + ')} LEDs in ${ch.chains.length} strip${ch.chains.length > 1 ? 's' : ''}.` + (ch.leftovers.length ? ` ${ch.leftovers.length} stray spot${ch.leftovers.length > 1 ? 's' : ''} left out.` : '') + (flagged ? ` ${flagged} place${flagged > 1 ? 's' : ''} ringed for you to check.` : '');
+        msg = `Found ${total} lit LEDs and read the wiring order from the colour cycle: ${ch.chains.map(c => c.filter(e => !e.join).length).join(' + ')} LEDs in ${ch.chains.length} strip${ch.chains.length > 1 ? 's' : ''}.` + (ch.leftovers.length ? ` ${ch.leftovers.length} stray spot${ch.leftovers.length > 1 ? 's' : ''} left out.` : '') + (flagged ? ` ${flagged} place${flagged > 1 ? 's' : ''} ringed for you to check.` : '') + (cut.length ? ` ${cut.length} strip${cut.length > 1 ? 's run' : ' runs'} off the edge of the photo: delete ${cut.length > 1 ? 'them' : 'it'} if ${cut.length > 1 ? 'they belong' : 'it belongs'} to another photo.` : '');
       } else {
         const st = takeStrip(), start = r.blobs.reduce((bi, bb, i) => (bb.x + bb.y < r.blobs[bi].x + r.blobs[bi].y ? i : bi), 0), order = D.orderNearest(r.blobs, start);
         st.leds.push(...order.map(i => M.newLed(s.id, r.blobs[i].x, r.blobs[i].y)));
@@ -963,6 +969,6 @@
     syncSetup(); changed(); setTool('select'); resize();
     if (!/[?&]fresh\b/.test(location.search)) restoreAutosave();
   }
-  window.LM.app.api = { addPhotos, openProjectFile, saveProject, projectBytes, setTool, setView, fit, toScreen, fromScreen, legPoints, finishPath, loadProject, renderExport, getExport: () => exportResult };
+  window.LM.app.api = { prepFor, findLit, sheetById, addPhotos, openProjectFile, saveProject, projectBytes, setTool, setView, fit, toScreen, fromScreen, legPoints, finishPath, loadProject, renderExport, getExport: () => exportResult };
   init();
 })();
