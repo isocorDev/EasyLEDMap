@@ -6,8 +6,9 @@ You add a photo, trace the path the data takes, and the tool counts and places t
 it. Then you mark dead pixels, name groups, and export. Everything runs in the browser. Photos
 are never uploaded.
 
-Status: version 0.1. It was built for S-type (bendable) strips with 5050 LEDs and is tested on
-those. See [What it does not do yet](#what-it-does-not-do-yet).
+Status: version 0.2. It was built for S-type (bendable) strips with 5050 LEDs. There are two
+ways to map: photograph the LEDs lit, which is the most accurate, or trace an unlit strip by
+hand. See [What it does not do yet](#what-it-does-not-do-yet).
 
 ## Run it
 
@@ -18,7 +19,30 @@ those. See [What it does not do yet](#what-it-does-not-do-yet).
 - **From source:** `python3 -m http.server 8765` in this folder, then open
   http://localhost:8765.
 
-## Map a strip
+## Map from a photo of lit LEDs
+
+This is the accurate route. Every LED position comes from the photo, so uneven spacing and
+squeezed turns do not matter.
+
+1. Light the strip in a repeating **red, green, blue** cycle. In WLED: effect **Solid Pattern
+   Tri**, the three colours set to red, green and blue, the Size slider at its lowest, and
+   brightness low (10 to 20 of 255). Set each output a little longer than you think it is, so no
+   LED at the end stays dark.
+2. Photograph it straight-on with the panel filling the frame. Lower the exposure until each LED
+   is a separate dot. A shot with the room lights dimmed is the safest.
+3. Add the photo and choose **Find lit LEDs**. The tool finds the LEDs, reads the wiring order
+   and direction from the colour cycle, and makes a first guess at rows and turns: LEDs in
+   turns go dead and each row becomes a group.
+4. Check the guess. Short runs at the ends of a panel are the likeliest to be wrong. Select a
+   run and use Mark dead or Mark live, or run **Find rows and turns** again after fixing.
+
+If more than one strip is lit in the photo, set "Separate strips lit in this photo" under
+Photographing lit LEDs before you choose Find lit LEDs.
+
+Lit in a single colour instead? The LEDs are still found, but ordered by nearest neighbour.
+Select the true first pixel and choose a reorder button.
+
+## Map an unlit strip by tracing
 
 1. **Setup.** Pick the chipset. Voltage, current per pixel and colour order fill in and can be
    changed.
@@ -34,27 +58,26 @@ those. See [What it does not do yet](#what-it-does-not-do-yet).
    - The count for each leg shows in the bar. `[` and `]` fix it. `Backspace` steps back.
    - On a curved turn, hold `Shift` and click each LED in it. Shift-click places exactly one LED.
    - `J` marks the last leg as a wire jump with no LEDs between the two points.
-   - `Enter` finishes. With **Group each row** on, every row becomes its own group.
+   - **Finish strip** (or `Enter`) says the strip is complete. Your next click then starts a
+     new strip. `Escape` only pauses, and Continue picks a finished strip up again.
+   - With **Group each row** on, every row becomes its own group.
 5. **Check the numbers.** Index labels appear at the ends of every run, so you can compare
    them with numbers written on the piece. LEDs with a dashed ring are ones the tool was unsure
    about.
-6. **Fix anything.** Select, drag, delete, mark dead (`D`), change the count of a run
-   (`[` `]`), insert an LED on the wire (Add LED), undo (`Ctrl+Z`).
+6. **Fix anything, at any time.** The LEDs you clicked are pinned, shown with a white centre.
+   The ones the tool placed between them float. Drag any LED to where it really is and it
+   becomes a pin: the LEDs either side spread out to follow. Select a floating LED and press
+   `[` or `]` to change how many sit between its two pins. You can also delete, mark dead
+   (`D`), insert an LED on the wire (Add LED), and undo (`Ctrl+Z`).
 7. **Export**, and export again whenever you change something.
 8. **Save project** writes a `.ledmap` file you can reopen later. Work is also kept in the
    browser between visits.
 
 ### More than one strip
 
-Each strip is one data pin. Choose **Add strip** before drawing the next one, then set its GPIO
-in the Strips panel. Strips are numbered in list order: the second strip's first pixel follows
+Each strip is one data pin. Finish one strip and your next click starts the next. Set each
+strip's GPIO in the Strips panel. Strips are numbered in list order: the second strip's first pixel follows
 the first strip's last.
-
-### Lit LEDs
-
-For a photo taken with the LEDs on, choose **Find lit LEDs**. The tool finds the bright spots
-and orders them by nearest neighbour. Select the true first pixel and choose a reorder button
-to start from there.
 
 ### Angled photos and several photos
 
@@ -69,7 +92,8 @@ assembly. Photos are scaled to match each other using their LED spacing.
 | `V` `P` `A` `H` | Select, Draw path, Add LED, Pan |
 | Scroll, pinch | Zoom. Hold `Space` and drag to pan |
 | `F` | Fit to window |
-| `[` `]` | One fewer or one more LED in the last leg, or in the selected run |
+| `[` `]` | One fewer or one more LED in the last leg, between two pins, or in the selected run |
+| `Enter`, `Escape` | While drawing: finish the strip, or pause it |
 | `D` | Dead or live |
 | `G` | New group from the selection |
 | `T` `J` | While drawing: switch the last leg between row and turn, or make it a wire jump |
@@ -114,8 +138,10 @@ run on hardware by the tool's authors for every configuration: read it before yo
 ## What it does not do yet
 
 - **Unlit strips are not found automatically.** You trace the path and the tool counts the
-  LEDs between your clicks. Lit LEDs are found automatically.
-- Turn counts are an estimate from distance. Check them, or Shift-click each LED.
+  LEDs between your clicks. On S-type strips the spacing varies and turns get squeezed, so
+  counts in turns are often off. A lit photo avoids all of that.
+- Lit detection has been tested on generated photos, not yet on a wide range of real ones.
+- Rows and turns are guessed from the shape of the strip. It is a first pass to correct.
 - Flattened photos show as LED positions only in the Layout tab. The photo is not warped.
 - No snapping of two photos of one panel onto each other. Align them by hand in Layout.
 - No DXF import, no power injection planner, no video or 3D capture.
@@ -129,6 +155,7 @@ No build step and no dependencies. The app is plain scripts in `js/`.
 npm test           # counting, exporters, and a compile check of generated code (needs g++)
 npm run serve      # in one terminal
 npm run test:ui    # in another: browser tests, needs Playwright
+python3 tools/make_fixture.py   # redraws the generated test photos
 npm run build      # writes dist/easyledmap.html
 ```
 

@@ -11,7 +11,7 @@
       const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
       V[i] = mx; S[i] = mx - mn;
     }
-    return { w, h, V, S };
+    return { w, h, V, S, rgba };
   }
 
   function bilinear(P, w, h, x, y) {
@@ -128,47 +128,200 @@
   }
   function countAlong(prep, ax, ay, bx, by, ledSize, pitchGuess, tol, map) { return countPoly(prep, [[ax, ay], [bx, by]], ledSize, pitchGuess, tol, map); }
 
+  /* ---------- lit LEDs ---------- */
+  function otsu(hist, from) {
+    let total = 0, sum = 0; for (let i = from; i < 256; i++) { total += hist[i]; sum += i * hist[i]; }
+    let wB = 0, sB = 0, best = 0, cut = from;
+    for (let t = from; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = total - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; cut = t; } }
+    return cut;
+  }
+  const median = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
+  /** Connected blobs of pixels where keep[i] is set; pixels only join when label[i] matches. */
+  function blobsOf(w, h, keep, label, weight) {
+    const n = w * h, seen = new Uint8Array(n), stack = new Int32Array(Math.min(n, 4e6)), out = [];
+    for (let i = 0; i < n; i++) {
+      if (seen[i] || !keep[i]) continue;
+      const L = label ? label[i] : 0; let sp = 0, area = 0, sx = 0, sy = 0, sw = 0, x0 = w, y0 = h, x1 = 0, y1 = 0, peak = 0; stack[sp++] = i; seen[i] = 1;
+      while (sp) {
+        const j = stack[--sp], x = j % w, y = (j / w) | 0, wt = weight ? weight[j] + 1 : 1;
+        area++; sx += x * wt; sy += y * wt; sw += wt; if (wt > peak) peak = wt; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0) { const k = j - 1; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (x < w - 1) { const k = j + 1; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (y > 0) { const k = j - w; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (y < h - 1) { const k = j + w; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+      }
+      out.push({ x: sx / sw, y: sy / sw, area, cls: label ? L : -1, box: [x0, y0, x1, y1], peak });
+    }
+    return out;
+  }
+  /** Split a blob that covers several LEDs into k parts along its long axis. */
+  function splitBlob(b, k, w, keep, label) {
+    const px = []; for (let y = b.box[1]; y <= b.box[3]; y++) for (let x = b.box[0]; x <= b.box[2]; x++) { const i = y * w + x; if (keep[i] && (!label || label[i] === b.cls)) px.push([x, y]); }
+    let mx = 0, my = 0; for (const p of px) { mx += p[0]; my += p[1]; } mx /= px.length; my /= px.length;
+    let sxx = 0, sxy = 0, syy = 0; for (const p of px) { const dx = p[0] - mx, dy = p[1] - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+    const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), c = Math.cos(ang), s = Math.sin(ang);
+    px.sort((p, q) => (p[0] * c + p[1] * s) - (q[0] * c + q[1] * s));
+    const out = [], per = px.length / k;
+    for (let j = 0; j < k; j++) { const part = px.slice(Math.round(j * per), Math.round((j + 1) * per)); if (!part.length) continue; let x = 0, y = 0; for (const p of part) { x += p[0]; y += p[1]; } out.push({ x: x / part.length, y: y / part.length, area: part.length, cls: b.cls, box: b.box, peak: b.peak, split: true }); }
+    return out;
+  }
+  function tidyBlobs(blobs, w, keep, label) {
+    if (blobs.length < 3) return blobs;
+    let A = median(blobs.filter(b => b.area >= 3).map(b => b.area)) || 1;
+    // Typical distance to the nearest neighbour, among blobs big enough to be LEDs.
+    const big = blobs.filter(b => b.area >= A * 0.3), nn = [];
+    for (let i = 0; i < big.length; i++) { let bd = Infinity; for (let j = 0; j < big.length; j++) if (i !== j) { const d = (big[i].x - big[j].x) ** 2 + (big[i].y - big[j].y) ** 2; if (d < bd) bd = d; } nn.push(Math.sqrt(bd)); }
+    const pitch = median(nn) || 10;
+    // Fragments of one LED (a ring around a blown-out centre) merge back together.
+    const used = new Uint8Array(blobs.length), merged = [];
+    for (let i = 0; i < blobs.length; i++) {
+      if (used[i]) continue; let g = [blobs[i]]; used[i] = 1;
+      for (let j = i + 1; j < blobs.length; j++) if (!used[j] && blobs[j].cls === blobs[i].cls && Math.hypot(blobs[j].x - blobs[i].x, blobs[j].y - blobs[i].y) < pitch * 0.42) { used[j] = 1; g.push(blobs[j]); }
+      if (g.length === 1) { merged.push(g[0]); continue; }
+      let a = 0, x = 0, y = 0, peak = 0; const box = [Infinity, Infinity, 0, 0];
+      for (const b of g) { if (b.peak > peak) peak = b.peak; a += b.area; x += b.x * b.area; y += b.y * b.area; box[0] = Math.min(box[0], b.box[0]); box[1] = Math.min(box[1], b.box[1]); box[2] = Math.max(box[2], b.box[2]); box[3] = Math.max(box[3], b.box[3]); }
+      merged.push({ x: x / a, y: y / a, area: a, cls: g[0].cls, box, peak });
+    }
+    A = median(merged.filter(b => b.area >= 3).map(b => b.area)) || 1;
+    const out = [];
+    for (const b of merged) {
+      if (b.area < Math.max(2, A * 0.12)) continue;                       // speck
+      const k = Math.round(b.area / A);
+      if (b.area > A * 2.6 && k >= 2 && k <= 8) out.push(...splitBlob(b, k, w, keep, label)); else if (b.area <= A * 12) out.push(b);
+    }
+    return out;
+  }
+  /** Coloured LEDs: bright and strongly coloured pixels, grouped by red, green or blue. */
+  function litColour(prep, o) {
+    const { w, h, V, S, rgba } = prep, n = w * h, score = new Uint8Array(n), cls = new Uint8Array(n), hist = new Uint32Array(256);
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const sc = (S[i] * V[i]) >> 8; score[i] = sc; hist[sc]++;
+      const r = rgba[j], g = rgba[j + 1], b = rgba[j + 2]; cls[i] = (r >= g && r >= b) ? 0 : (g >= b ? 1 : 2);
+    }
+    const thr = o.threshold || Math.max(100, Math.min(190, otsu(hist, 24)));
+    const keep = new Uint8Array(n); let count = 0; for (let i = 0; i < n; i++) if (score[i] >= thr) { keep[i] = 1; count++; }
+    if (count < 12) return null;
+    let blobs = blobsOf(w, h, keep, cls, score).filter(b => b.area >= 2);
+    // A lit LED is far more vivid than anything merely coloured, such as copper solder pads
+    // under room light. Keep only blobs whose strongest pixel is close to the vivid ones.
+    if (blobs.length > 4) { const peaks = blobs.map(b => b.peak).sort((a, b) => a - b), ref = peaks[Math.floor(peaks.length * 0.9)]; blobs = blobs.filter(b => b.peak >= ref * 0.62); }
+    blobs = tidyBlobs(blobs, w, keep, cls);
+    const per = [0, 0, 0]; for (const b of blobs) per[b.cls]++;
+    return { mode: 'colour', threshold: thr, blobs, perColour: per };
+  }
+  function litBright(prep, o) {
+    const { w, h, V } = prep, n = w * h, hist = new Uint32Array(256); for (let i = 0; i < n; i++) hist[V[i]]++;
+    const cut = otsu(hist, 0), thr = o.threshold || Math.max(150, Math.min(250, Math.round(cut + (255 - cut) * 0.5)));
+    const keep = new Uint8Array(n); for (let i = 0; i < n; i++) if (V[i] >= thr) keep[i] = 1;
+    const blobs = tidyBlobs(blobsOf(w, h, keep, null, V).filter(b => b.area >= 2 && b.area <= Math.max(400, n / 400)), w, keep, null);
+    return { mode: 'bright', threshold: thr, blobs, perColour: [0, 0, 0] };
+  }
   /**
-   * Find lit LEDs: bright blobs. Returns [{ x, y, area }], brightest first.
-   * threshold 0 picks one automatically from the brightness histogram.
+   * Find lit LEDs. Returns { mode, blobs: [{ x, y, area, cls }], perColour }.
+   * cls is 0, 1 or 2 for red, green or blue LEDs, or -1 when found by brightness alone.
+   * opts.mode: 'auto' (default), 'colour' or 'bright'.
    */
   function detectLit(prep, opts) {
-    const o = Object.assign({ threshold: 0, minArea: 2, maxArea: 0 }, opts);
-    const { w, h, V } = prep, n = w * h;
-    let thr = o.threshold;
-    if (!thr) {
-      const hist = new Uint32Array(256); for (let i = 0; i < n; i++) hist[V[i]]++;
-      // Otsu split, then keep to the bright side so glow around an LED is not counted.
-      let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
-      let wB = 0, sB = 0, best = 0, cut = 200;
-      for (let t = 0; t < 256; t++) {
-        wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break;
-        sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
-        if (v > best) { best = v; cut = t; }
+    const o = Object.assign({ mode: 'auto', threshold: 0 }, opts);
+    if (o.mode !== 'bright' && prep.rgba) { const c = litColour(prep, o); if (c && (c.blobs.length >= 4 || o.mode === 'colour')) return c; if (o.mode === 'colour') return { mode: 'colour', threshold: 0, blobs: [], perColour: [0, 0, 0] }; }
+    return litBright(prep, o);
+  }
+
+  /**
+   * Order LEDs that were lit in a repeating red, green, blue cycle along the wire.
+   * Each LED's successor is the nearest unused LED of the next colour, so direction comes from
+   * the cycle itself and the walk does not hop to a neighbouring row.
+   * Returns { chains: [[blob index or { gap: [x, y] }...]], leftovers, pitch, joins }.
+   * opts.strips: how many separate strips to expect (pieces are joined until this many remain).
+   */
+  function chainByColour(blobs, opts) {
+    const o = Object.assign({ strips: 1 }, opts), n = blobs.length, used = new Uint8Array(n);
+    const nn = []; for (let i = 0; i < n; i++) { let bd = Infinity; for (let j = 0; j < n; j++) if (i !== j) { const d = (blobs[i].x - blobs[j].x) ** 2 + (blobs[i].y - blobs[j].y) ** 2; if (d < bd) bd = d; } nn.push(Math.sqrt(bd)); }
+    const pitch = median(nn) || 1;
+    const nearest = (from, cls, maxD) => { let best = -1, bd = maxD * maxD; for (let j = 0; j < n; j++) { if (used[j] || blobs[j].cls !== cls) continue; const d = (blobs[j].x - from.x) ** 2 + (blobs[j].y - from.y) ** 2; if (d < bd) { bd = d; best = j; } } return best; };
+    const walk = (start, dir) => {       // dir +1 follows the cycle, -1 walks it backwards
+      const out = []; let cur = blobs[start];
+      for (;;) {
+        const want = (cur.cls + dir + 3) % 3; let j = nearest(cur, want, pitch * 2.1);
+        if (j < 0) {                     // one LED may have been missed: look one further along the cycle
+          const k = nearest(cur, (want + dir + 3) % 3, pitch * 3.1);
+          if (k < 0) break;
+          out.push({ gap: [(cur.x + blobs[k].x) / 2, (cur.y + blobs[k].y) / 2], cls: want }); j = k;
+        }
+        used[j] = 1; out.push(j); cur = blobs[j];
       }
-      thr = Math.max(150, Math.min(250, Math.round(cut + (255 - cut) * 0.5)));
+      return out;
+    };
+    let chains = [];
+    for (let s = 0; s < n; s++) {
+      if (used[s]) continue; used[s] = 1;
+      const fwd = walk(s, 1), back = walk(s, -1).reverse();
+      chains.push(back.concat([s], fwd));
     }
-    const seen = new Uint8Array(n), out = [], stack = new Int32Array(n > 4e6 ? 4e6 : n);
-    const maxArea = o.maxArea || Math.max(400, n / 400);
-    for (let i = 0; i < n; i++) {
-      if (seen[i] || V[i] < thr) continue;
-      let sp = 0, area = 0, sx = 0, sy = 0, sw = 0; stack[sp++] = i; seen[i] = 1;
-      while (sp) {
-        const j = stack[--sp], x = j % w, y = (j / w) | 0, wt = V[j] - thr + 1;
-        area++; sx += x * wt; sy += y * wt; sw += wt;
-        if (x > 0 && !seen[j - 1] && V[j - 1] >= thr && sp < stack.length) { seen[j - 1] = 1; stack[sp++] = j - 1; }
-        if (x < w - 1 && !seen[j + 1] && V[j + 1] >= thr && sp < stack.length) { seen[j + 1] = 1; stack[sp++] = j + 1; }
-        if (y > 0 && !seen[j - w] && V[j - w] >= thr && sp < stack.length) { seen[j - w] = 1; stack[sp++] = j - w; }
-        if (y < h - 1 && !seen[j + w] && V[j + w] >= thr && sp < stack.length) { seen[j + w] = 1; stack[sp++] = j + w; }
+    const real = c => c.filter(e => typeof e === 'number').length;
+    const leftovers = []; chains = chains.filter(c => { if (real(c) >= 4) return true; for (const e of c) if (typeof e === 'number') leftovers.push(e); return false; });
+    const head = c => blobs[c.find(e => typeof e === 'number')], tail = c => blobs[[...c].reverse().find(e => typeof e === 'number')];
+    // Join pieces end to start where the colours carry on, nearest first: wire jumps and missed LEDs.
+    let joins = 0;
+    while (chains.length > Math.max(1, o.strips)) {
+      let best = null;
+      for (let a = 0; a < chains.length; a++) for (let b = 0; b < chains.length; b++) {
+        if (a === b) continue; const t = tail(chains[a]), hd = head(chains[b]), d = Math.hypot(t.x - hd.x, t.y - hd.y), step = (hd.cls - t.cls + 3) % 3;
+        const cost = d + (step === 1 ? 0 : step === 2 ? pitch * 2 : pitch * 6);
+        if (!best || cost < best.cost) best = { a, b, cost, step, t, hd };
       }
-      if (area >= o.minArea && area <= maxArea) out.push({ x: sx / sw, y: sy / sw, area });
+      if (!best) break;
+      const mid = best.step === 2 ? [{ gap: [(best.t.x + best.hd.x) / 2, (best.t.y + best.hd.y) / 2], cls: (best.t.cls + 1) % 3 }] : [];
+      const joined = chains[best.a].concat(mid, [{ join: true }], chains[best.b]);
+      chains = chains.filter((_, i) => i !== best.a && i !== best.b); chains.push(joined); joins++;
     }
-    // Drop specks far smaller than the typical blob.
-    if (out.length > 8) {
-      const areas = out.map(b => b.area).sort((a, b) => a - b), med = areas[areas.length >> 1];
-      return { threshold: thr, blobs: out.filter(b => b.area >= med * 0.15 && b.area <= med * 8) };
+    chains.sort((p, q) => q.length - p.length);
+    return { chains, leftovers, pitch, joins };
+  }
+
+  /**
+   * Split an ordered run of LED positions into rows and turns.
+   * Corners are found by simplifying the path. Long straight pieces are rows; a short piece is
+   * a row only if it runs parallel to the nearest long row. Everything else is a turn.
+   * Returns one entry per LED: { dead, brk } (brk marks the first LED of a row).
+   */
+  function rowsAndTurns(pts, pitch, minLen) {
+    const n = pts.length, out = pts.map(() => ({ dead: false, brk: false })); if (n < 3) return out;
+    minLen = Math.max(2, minLen || 5); const eps = pitch * 0.7, keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+    const stack = [[0, n - 1]];
+    while (stack.length) {
+      const [i0, i1] = stack.pop(); if (i1 - i0 < 2) continue; const a = pts[i0], b = pts[i1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9; let md = 0, mi = -1;
+      for (let i = i0 + 1; i < i1; i++) { const d = L < 1e-6 ? Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1]) : Math.abs((b[0] - a[0]) * (a[1] - pts[i][1]) - (a[0] - pts[i][0]) * (b[1] - a[1])) / L; if (d > md) { md = d; mi = i; } }
+      if (md > eps) { keep[mi] = 1; stack.push([i0, mi], [mi, i1]); }
     }
-    return { threshold: thr, blobs: out };
+    const v = []; for (let i = 0; i < n; i++) if (keep[i]) v.push(i);
+    const segs = []; for (let j = 0; j + 1 < v.length; j++) { const a = pts[v[j]], b = pts[v[j + 1]]; segs.push({ a: v[j], b: v[j + 1], count: v[j + 1] - v[j] + 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), row: false }); }
+    const angDiff = (p, q) => { let d = Math.abs(p - q) % Math.PI; return d > Math.PI / 2 ? Math.PI - d : d; };
+    const long = segs.filter(s => s.count >= minLen); for (const s of long) s.row = true;
+    if (!long.length) return out;        // nothing that looks like a row: leave everything live
+    segs.forEach((s, j) => {
+      if (s.row) return; let best = null, bd = Infinity;
+      segs.forEach((t, k) => { if (t.count >= minLen && Math.abs(k - j) < bd) { bd = Math.abs(k - j); best = t; } });
+      if (best && s.count >= 2 && angDiff(s.ang, best.ang) < 0.44 && !(segs[j - 1] && segs[j - 1].row && segs[j + 1] && segs[j + 1].row && s.count <= 4 && angDiff(s.ang, best.ang) > 0.2)) s.row = true;
+    });
+    // The simplified corners are only approximate. Fit a line to each row and let the row end
+    // exactly where the LEDs leave that line, so a row neither loses its last LED nor takes one from the turn.
+    const rows = segs.filter(s => s.row).map(s => ({ a: s.a, b: s.b })), tol = pitch * 0.45;
+    for (const r of rows) {
+      const i0 = r.b - r.a >= 4 ? r.a + 1 : r.a, i1 = r.b - r.a >= 4 ? r.b - 1 : r.b; let mx = 0, my = 0, c = 0;
+      for (let i = i0; i <= i1; i++) { mx += pts[i][0]; my += pts[i][1]; c++; } mx /= c; my /= c;
+      let sxx = 0, sxy = 0, syy = 0; for (let i = i0; i <= i1; i++) { const dx = pts[i][0] - mx, dy = pts[i][1] - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+      const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+      const off = i => Math.abs(-(pts[i][0] - mx) * uy + (pts[i][1] - my) * ux), along = i => (pts[i][0] - mx) * ux + (pts[i][1] - my) * uy;
+      while (r.b > r.a + 1 && off(r.b) > tol) r.b--; while (r.a < r.b - 1 && off(r.a) > tol) r.a++;
+      const dir = Math.sign(along(r.b) - along(r.a)) || 1;
+      while (r.b + 1 < n && off(r.b + 1) <= tol && (along(r.b + 1) - along(r.b)) * dir > pitch * 0.3) r.b++;
+      while (r.a - 1 >= 0 && off(r.a - 1) <= tol && (along(r.a) - along(r.a - 1)) * dir > pitch * 0.3) r.a--;
+    }
+    const live = new Uint8Array(n), start = new Uint8Array(n); let lastEnd = -1;
+    for (const r of rows) { const from = Math.max(r.a, lastEnd + 1); if (from > r.b) continue; for (let i = from; i <= r.b; i++) live[i] = 1; start[from] = 1; lastEnd = r.b; }
+    for (let i = 0; i < n; i++) { out[i].dead = !live[i]; out[i].brk = !!start[i] && i > 0; }
+    return out;
   }
 
   /** Order points by walking to the nearest unvisited neighbour, starting at index `start`. */
@@ -214,7 +367,7 @@
     return order;
   }
 
-  const api = { prepare, bilinear, profiles, countAlong, countPoly, polyLength, polyAt, boxSmooth, detectLit, orderNearest, orderSerpentine };
+  const api = { prepare, bilinear, profiles, countAlong, countPoly, polyLength, polyAt, boxSmooth, detectLit, chainByColour, rowsAndTurns, orderNearest, orderSerpentine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.LM = root.LM || {}; root.LM.detect = Object.assign(root.LM.detect || {}, api);
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -172,6 +172,10 @@ h1, h2, p { margin: 0; }
   .export-opts { border-right: 0; border-bottom: 1px solid var(--rule); overflow: visible; }
   .empty-card h1 { font-size: 22px; }
 }
+
+.tip { font-size: 12.5px; }
+.tip > summary { cursor: pointer; color: var(--accent); padding: 2px 0; }
+.tip .note { margin: 6px 0; }
 </style>
 </head>
 <body>
@@ -226,7 +230,8 @@ h1, h2, p { margin: 0; }
         <button class="btn tiny" id="btnLegType" title="Switch the last leg between row and turn (T)">Row / turn</button>
         <button class="btn tiny" id="btnLegJump" title="The last click was a wire jump: no LEDs between the two points (J)">Wire jump</button>
         <button class="btn tiny" id="btnLegUndo" title="Remove the last leg (Backspace)">Remove leg</button>
-        <button class="btn tiny primary" id="btnPathDone" title="Finish (Enter)">Finish</button>
+        <button class="btn tiny primary" id="btnPathDone" title="This strip is complete. The next click starts a new strip (Enter)">Finish strip</button>
+        <button class="btn tiny" id="btnPathContinue" title="Add more LEDs to the end of this strip" hidden>Continue strip</button>
       </div>
       <div class="viewopts" id="viewOpts">
         <label title="Dim the photo so the map reads clearly">Photo <input type="range" id="photoDim" min="0" max="100" value="100"></label>
@@ -275,6 +280,7 @@ h1, h2, p { margin: 0; }
       <summary>Groups <span class="count" id="groupCount"></span></summary>
       <div id="groupList" class="list groups"></div>
       <div class="sec-actions">
+        <button class="btn tiny" id="btnFindRows" title="Guess rows and turns on the active strip from its shape: turns go dead, each row becomes a group">Find rows and turns</button>
         <button class="btn tiny" id="btnGroupRuns" title="Make one group from every unbroken run of live pixels on the active strip">Group each run</button>
         <button class="btn tiny" id="btnClearGroups">Clear groups</button>
       </div>
@@ -534,7 +540,7 @@ h1, h2, p { margin: 0; }
       const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
       V[i] = mx; S[i] = mx - mn;
     }
-    return { w, h, V, S };
+    return { w, h, V, S, rgba };
   }
 
   function bilinear(P, w, h, x, y) {
@@ -651,47 +657,200 @@ h1, h2, p { margin: 0; }
   }
   function countAlong(prep, ax, ay, bx, by, ledSize, pitchGuess, tol, map) { return countPoly(prep, [[ax, ay], [bx, by]], ledSize, pitchGuess, tol, map); }
 
+  /* ---------- lit LEDs ---------- */
+  function otsu(hist, from) {
+    let total = 0, sum = 0; for (let i = from; i < 256; i++) { total += hist[i]; sum += i * hist[i]; }
+    let wB = 0, sB = 0, best = 0, cut = from;
+    for (let t = from; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = total - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; cut = t; } }
+    return cut;
+  }
+  const median = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
+  /** Connected blobs of pixels where keep[i] is set; pixels only join when label[i] matches. */
+  function blobsOf(w, h, keep, label, weight) {
+    const n = w * h, seen = new Uint8Array(n), stack = new Int32Array(Math.min(n, 4e6)), out = [];
+    for (let i = 0; i < n; i++) {
+      if (seen[i] || !keep[i]) continue;
+      const L = label ? label[i] : 0; let sp = 0, area = 0, sx = 0, sy = 0, sw = 0, x0 = w, y0 = h, x1 = 0, y1 = 0, peak = 0; stack[sp++] = i; seen[i] = 1;
+      while (sp) {
+        const j = stack[--sp], x = j % w, y = (j / w) | 0, wt = weight ? weight[j] + 1 : 1;
+        area++; sx += x * wt; sy += y * wt; sw += wt; if (wt > peak) peak = wt; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0) { const k = j - 1; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (x < w - 1) { const k = j + 1; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (y > 0) { const k = j - w; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+        if (y < h - 1) { const k = j + w; if (!seen[k] && keep[k] && (!label || label[k] === L) && sp < stack.length) { seen[k] = 1; stack[sp++] = k; } }
+      }
+      out.push({ x: sx / sw, y: sy / sw, area, cls: label ? L : -1, box: [x0, y0, x1, y1], peak });
+    }
+    return out;
+  }
+  /** Split a blob that covers several LEDs into k parts along its long axis. */
+  function splitBlob(b, k, w, keep, label) {
+    const px = []; for (let y = b.box[1]; y <= b.box[3]; y++) for (let x = b.box[0]; x <= b.box[2]; x++) { const i = y * w + x; if (keep[i] && (!label || label[i] === b.cls)) px.push([x, y]); }
+    let mx = 0, my = 0; for (const p of px) { mx += p[0]; my += p[1]; } mx /= px.length; my /= px.length;
+    let sxx = 0, sxy = 0, syy = 0; for (const p of px) { const dx = p[0] - mx, dy = p[1] - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+    const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), c = Math.cos(ang), s = Math.sin(ang);
+    px.sort((p, q) => (p[0] * c + p[1] * s) - (q[0] * c + q[1] * s));
+    const out = [], per = px.length / k;
+    for (let j = 0; j < k; j++) { const part = px.slice(Math.round(j * per), Math.round((j + 1) * per)); if (!part.length) continue; let x = 0, y = 0; for (const p of part) { x += p[0]; y += p[1]; } out.push({ x: x / part.length, y: y / part.length, area: part.length, cls: b.cls, box: b.box, peak: b.peak, split: true }); }
+    return out;
+  }
+  function tidyBlobs(blobs, w, keep, label) {
+    if (blobs.length < 3) return blobs;
+    let A = median(blobs.filter(b => b.area >= 3).map(b => b.area)) || 1;
+    // Typical distance to the nearest neighbour, among blobs big enough to be LEDs.
+    const big = blobs.filter(b => b.area >= A * 0.3), nn = [];
+    for (let i = 0; i < big.length; i++) { let bd = Infinity; for (let j = 0; j < big.length; j++) if (i !== j) { const d = (big[i].x - big[j].x) ** 2 + (big[i].y - big[j].y) ** 2; if (d < bd) bd = d; } nn.push(Math.sqrt(bd)); }
+    const pitch = median(nn) || 10;
+    // Fragments of one LED (a ring around a blown-out centre) merge back together.
+    const used = new Uint8Array(blobs.length), merged = [];
+    for (let i = 0; i < blobs.length; i++) {
+      if (used[i]) continue; let g = [blobs[i]]; used[i] = 1;
+      for (let j = i + 1; j < blobs.length; j++) if (!used[j] && blobs[j].cls === blobs[i].cls && Math.hypot(blobs[j].x - blobs[i].x, blobs[j].y - blobs[i].y) < pitch * 0.42) { used[j] = 1; g.push(blobs[j]); }
+      if (g.length === 1) { merged.push(g[0]); continue; }
+      let a = 0, x = 0, y = 0, peak = 0; const box = [Infinity, Infinity, 0, 0];
+      for (const b of g) { if (b.peak > peak) peak = b.peak; a += b.area; x += b.x * b.area; y += b.y * b.area; box[0] = Math.min(box[0], b.box[0]); box[1] = Math.min(box[1], b.box[1]); box[2] = Math.max(box[2], b.box[2]); box[3] = Math.max(box[3], b.box[3]); }
+      merged.push({ x: x / a, y: y / a, area: a, cls: g[0].cls, box, peak });
+    }
+    A = median(merged.filter(b => b.area >= 3).map(b => b.area)) || 1;
+    const out = [];
+    for (const b of merged) {
+      if (b.area < Math.max(2, A * 0.12)) continue;                       // speck
+      const k = Math.round(b.area / A);
+      if (b.area > A * 2.6 && k >= 2 && k <= 8) out.push(...splitBlob(b, k, w, keep, label)); else if (b.area <= A * 12) out.push(b);
+    }
+    return out;
+  }
+  /** Coloured LEDs: bright and strongly coloured pixels, grouped by red, green or blue. */
+  function litColour(prep, o) {
+    const { w, h, V, S, rgba } = prep, n = w * h, score = new Uint8Array(n), cls = new Uint8Array(n), hist = new Uint32Array(256);
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const sc = (S[i] * V[i]) >> 8; score[i] = sc; hist[sc]++;
+      const r = rgba[j], g = rgba[j + 1], b = rgba[j + 2]; cls[i] = (r >= g && r >= b) ? 0 : (g >= b ? 1 : 2);
+    }
+    const thr = o.threshold || Math.max(100, Math.min(190, otsu(hist, 24)));
+    const keep = new Uint8Array(n); let count = 0; for (let i = 0; i < n; i++) if (score[i] >= thr) { keep[i] = 1; count++; }
+    if (count < 12) return null;
+    let blobs = blobsOf(w, h, keep, cls, score).filter(b => b.area >= 2);
+    // A lit LED is far more vivid than anything merely coloured, such as copper solder pads
+    // under room light. Keep only blobs whose strongest pixel is close to the vivid ones.
+    if (blobs.length > 4) { const peaks = blobs.map(b => b.peak).sort((a, b) => a - b), ref = peaks[Math.floor(peaks.length * 0.9)]; blobs = blobs.filter(b => b.peak >= ref * 0.62); }
+    blobs = tidyBlobs(blobs, w, keep, cls);
+    const per = [0, 0, 0]; for (const b of blobs) per[b.cls]++;
+    return { mode: 'colour', threshold: thr, blobs, perColour: per };
+  }
+  function litBright(prep, o) {
+    const { w, h, V } = prep, n = w * h, hist = new Uint32Array(256); for (let i = 0; i < n; i++) hist[V[i]]++;
+    const cut = otsu(hist, 0), thr = o.threshold || Math.max(150, Math.min(250, Math.round(cut + (255 - cut) * 0.5)));
+    const keep = new Uint8Array(n); for (let i = 0; i < n; i++) if (V[i] >= thr) keep[i] = 1;
+    const blobs = tidyBlobs(blobsOf(w, h, keep, null, V).filter(b => b.area >= 2 && b.area <= Math.max(400, n / 400)), w, keep, null);
+    return { mode: 'bright', threshold: thr, blobs, perColour: [0, 0, 0] };
+  }
   /**
-   * Find lit LEDs: bright blobs. Returns [{ x, y, area }], brightest first.
-   * threshold 0 picks one automatically from the brightness histogram.
+   * Find lit LEDs. Returns { mode, blobs: [{ x, y, area, cls }], perColour }.
+   * cls is 0, 1 or 2 for red, green or blue LEDs, or -1 when found by brightness alone.
+   * opts.mode: 'auto' (default), 'colour' or 'bright'.
    */
   function detectLit(prep, opts) {
-    const o = Object.assign({ threshold: 0, minArea: 2, maxArea: 0 }, opts);
-    const { w, h, V } = prep, n = w * h;
-    let thr = o.threshold;
-    if (!thr) {
-      const hist = new Uint32Array(256); for (let i = 0; i < n; i++) hist[V[i]]++;
-      // Otsu split, then keep to the bright side so glow around an LED is not counted.
-      let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
-      let wB = 0, sB = 0, best = 0, cut = 200;
-      for (let t = 0; t < 256; t++) {
-        wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break;
-        sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
-        if (v > best) { best = v; cut = t; }
+    const o = Object.assign({ mode: 'auto', threshold: 0 }, opts);
+    if (o.mode !== 'bright' && prep.rgba) { const c = litColour(prep, o); if (c && (c.blobs.length >= 4 || o.mode === 'colour')) return c; if (o.mode === 'colour') return { mode: 'colour', threshold: 0, blobs: [], perColour: [0, 0, 0] }; }
+    return litBright(prep, o);
+  }
+
+  /**
+   * Order LEDs that were lit in a repeating red, green, blue cycle along the wire.
+   * Each LED's successor is the nearest unused LED of the next colour, so direction comes from
+   * the cycle itself and the walk does not hop to a neighbouring row.
+   * Returns { chains: [[blob index or { gap: [x, y] }...]], leftovers, pitch, joins }.
+   * opts.strips: how many separate strips to expect (pieces are joined until this many remain).
+   */
+  function chainByColour(blobs, opts) {
+    const o = Object.assign({ strips: 1 }, opts), n = blobs.length, used = new Uint8Array(n);
+    const nn = []; for (let i = 0; i < n; i++) { let bd = Infinity; for (let j = 0; j < n; j++) if (i !== j) { const d = (blobs[i].x - blobs[j].x) ** 2 + (blobs[i].y - blobs[j].y) ** 2; if (d < bd) bd = d; } nn.push(Math.sqrt(bd)); }
+    const pitch = median(nn) || 1;
+    const nearest = (from, cls, maxD) => { let best = -1, bd = maxD * maxD; for (let j = 0; j < n; j++) { if (used[j] || blobs[j].cls !== cls) continue; const d = (blobs[j].x - from.x) ** 2 + (blobs[j].y - from.y) ** 2; if (d < bd) { bd = d; best = j; } } return best; };
+    const walk = (start, dir) => {       // dir +1 follows the cycle, -1 walks it backwards
+      const out = []; let cur = blobs[start];
+      for (;;) {
+        const want = (cur.cls + dir + 3) % 3; let j = nearest(cur, want, pitch * 2.1);
+        if (j < 0) {                     // one LED may have been missed: look one further along the cycle
+          const k = nearest(cur, (want + dir + 3) % 3, pitch * 3.1);
+          if (k < 0) break;
+          out.push({ gap: [(cur.x + blobs[k].x) / 2, (cur.y + blobs[k].y) / 2], cls: want }); j = k;
+        }
+        used[j] = 1; out.push(j); cur = blobs[j];
       }
-      thr = Math.max(150, Math.min(250, Math.round(cut + (255 - cut) * 0.5)));
+      return out;
+    };
+    let chains = [];
+    for (let s = 0; s < n; s++) {
+      if (used[s]) continue; used[s] = 1;
+      const fwd = walk(s, 1), back = walk(s, -1).reverse();
+      chains.push(back.concat([s], fwd));
     }
-    const seen = new Uint8Array(n), out = [], stack = new Int32Array(n > 4e6 ? 4e6 : n);
-    const maxArea = o.maxArea || Math.max(400, n / 400);
-    for (let i = 0; i < n; i++) {
-      if (seen[i] || V[i] < thr) continue;
-      let sp = 0, area = 0, sx = 0, sy = 0, sw = 0; stack[sp++] = i; seen[i] = 1;
-      while (sp) {
-        const j = stack[--sp], x = j % w, y = (j / w) | 0, wt = V[j] - thr + 1;
-        area++; sx += x * wt; sy += y * wt; sw += wt;
-        if (x > 0 && !seen[j - 1] && V[j - 1] >= thr && sp < stack.length) { seen[j - 1] = 1; stack[sp++] = j - 1; }
-        if (x < w - 1 && !seen[j + 1] && V[j + 1] >= thr && sp < stack.length) { seen[j + 1] = 1; stack[sp++] = j + 1; }
-        if (y > 0 && !seen[j - w] && V[j - w] >= thr && sp < stack.length) { seen[j - w] = 1; stack[sp++] = j - w; }
-        if (y < h - 1 && !seen[j + w] && V[j + w] >= thr && sp < stack.length) { seen[j + w] = 1; stack[sp++] = j + w; }
+    const real = c => c.filter(e => typeof e === 'number').length;
+    const leftovers = []; chains = chains.filter(c => { if (real(c) >= 4) return true; for (const e of c) if (typeof e === 'number') leftovers.push(e); return false; });
+    const head = c => blobs[c.find(e => typeof e === 'number')], tail = c => blobs[[...c].reverse().find(e => typeof e === 'number')];
+    // Join pieces end to start where the colours carry on, nearest first: wire jumps and missed LEDs.
+    let joins = 0;
+    while (chains.length > Math.max(1, o.strips)) {
+      let best = null;
+      for (let a = 0; a < chains.length; a++) for (let b = 0; b < chains.length; b++) {
+        if (a === b) continue; const t = tail(chains[a]), hd = head(chains[b]), d = Math.hypot(t.x - hd.x, t.y - hd.y), step = (hd.cls - t.cls + 3) % 3;
+        const cost = d + (step === 1 ? 0 : step === 2 ? pitch * 2 : pitch * 6);
+        if (!best || cost < best.cost) best = { a, b, cost, step, t, hd };
       }
-      if (area >= o.minArea && area <= maxArea) out.push({ x: sx / sw, y: sy / sw, area });
+      if (!best) break;
+      const mid = best.step === 2 ? [{ gap: [(best.t.x + best.hd.x) / 2, (best.t.y + best.hd.y) / 2], cls: (best.t.cls + 1) % 3 }] : [];
+      const joined = chains[best.a].concat(mid, [{ join: true }], chains[best.b]);
+      chains = chains.filter((_, i) => i !== best.a && i !== best.b); chains.push(joined); joins++;
     }
-    // Drop specks far smaller than the typical blob.
-    if (out.length > 8) {
-      const areas = out.map(b => b.area).sort((a, b) => a - b), med = areas[areas.length >> 1];
-      return { threshold: thr, blobs: out.filter(b => b.area >= med * 0.15 && b.area <= med * 8) };
+    chains.sort((p, q) => q.length - p.length);
+    return { chains, leftovers, pitch, joins };
+  }
+
+  /**
+   * Split an ordered run of LED positions into rows and turns.
+   * Corners are found by simplifying the path. Long straight pieces are rows; a short piece is
+   * a row only if it runs parallel to the nearest long row. Everything else is a turn.
+   * Returns one entry per LED: { dead, brk } (brk marks the first LED of a row).
+   */
+  function rowsAndTurns(pts, pitch, minLen) {
+    const n = pts.length, out = pts.map(() => ({ dead: false, brk: false })); if (n < 3) return out;
+    minLen = Math.max(2, minLen || 5); const eps = pitch * 0.7, keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+    const stack = [[0, n - 1]];
+    while (stack.length) {
+      const [i0, i1] = stack.pop(); if (i1 - i0 < 2) continue; const a = pts[i0], b = pts[i1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9; let md = 0, mi = -1;
+      for (let i = i0 + 1; i < i1; i++) { const d = L < 1e-6 ? Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1]) : Math.abs((b[0] - a[0]) * (a[1] - pts[i][1]) - (a[0] - pts[i][0]) * (b[1] - a[1])) / L; if (d > md) { md = d; mi = i; } }
+      if (md > eps) { keep[mi] = 1; stack.push([i0, mi], [mi, i1]); }
     }
-    return { threshold: thr, blobs: out };
+    const v = []; for (let i = 0; i < n; i++) if (keep[i]) v.push(i);
+    const segs = []; for (let j = 0; j + 1 < v.length; j++) { const a = pts[v[j]], b = pts[v[j + 1]]; segs.push({ a: v[j], b: v[j + 1], count: v[j + 1] - v[j] + 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), row: false }); }
+    const angDiff = (p, q) => { let d = Math.abs(p - q) % Math.PI; return d > Math.PI / 2 ? Math.PI - d : d; };
+    const long = segs.filter(s => s.count >= minLen); for (const s of long) s.row = true;
+    if (!long.length) return out;        // nothing that looks like a row: leave everything live
+    segs.forEach((s, j) => {
+      if (s.row) return; let best = null, bd = Infinity;
+      segs.forEach((t, k) => { if (t.count >= minLen && Math.abs(k - j) < bd) { bd = Math.abs(k - j); best = t; } });
+      if (best && s.count >= 2 && angDiff(s.ang, best.ang) < 0.44 && !(segs[j - 1] && segs[j - 1].row && segs[j + 1] && segs[j + 1].row && s.count <= 4 && angDiff(s.ang, best.ang) > 0.2)) s.row = true;
+    });
+    // The simplified corners are only approximate. Fit a line to each row and let the row end
+    // exactly where the LEDs leave that line, so a row neither loses its last LED nor takes one from the turn.
+    const rows = segs.filter(s => s.row).map(s => ({ a: s.a, b: s.b })), tol = pitch * 0.45;
+    for (const r of rows) {
+      const i0 = r.b - r.a >= 4 ? r.a + 1 : r.a, i1 = r.b - r.a >= 4 ? r.b - 1 : r.b; let mx = 0, my = 0, c = 0;
+      for (let i = i0; i <= i1; i++) { mx += pts[i][0]; my += pts[i][1]; c++; } mx /= c; my /= c;
+      let sxx = 0, sxy = 0, syy = 0; for (let i = i0; i <= i1; i++) { const dx = pts[i][0] - mx, dy = pts[i][1] - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+      const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+      const off = i => Math.abs(-(pts[i][0] - mx) * uy + (pts[i][1] - my) * ux), along = i => (pts[i][0] - mx) * ux + (pts[i][1] - my) * uy;
+      while (r.b > r.a + 1 && off(r.b) > tol) r.b--; while (r.a < r.b - 1 && off(r.a) > tol) r.a++;
+      const dir = Math.sign(along(r.b) - along(r.a)) || 1;
+      while (r.b + 1 < n && off(r.b + 1) <= tol && (along(r.b + 1) - along(r.b)) * dir > pitch * 0.3) r.b++;
+      while (r.a - 1 >= 0 && off(r.a - 1) <= tol && (along(r.a) - along(r.a - 1)) * dir > pitch * 0.3) r.a--;
+    }
+    const live = new Uint8Array(n), start = new Uint8Array(n); let lastEnd = -1;
+    for (const r of rows) { const from = Math.max(r.a, lastEnd + 1); if (from > r.b) continue; for (let i = from; i <= r.b; i++) live[i] = 1; start[from] = 1; lastEnd = r.b; }
+    for (let i = 0; i < n; i++) { out[i].dead = !live[i]; out[i].brk = !!start[i] && i > 0; }
+    return out;
   }
 
   /** Order points by walking to the nearest unvisited neighbour, starting at index `start`. */
@@ -737,7 +896,7 @@ h1, h2, p { margin: 0; }
     return order;
   }
 
-  const api = { prepare, bilinear, profiles, countAlong, countPoly, polyLength, polyAt, boxSmooth, detectLit, orderNearest, orderSerpentine };
+  const api = { prepare, bilinear, profiles, countAlong, countPoly, polyLength, polyAt, boxSmooth, detectLit, chainByColour, rowsAndTurns, orderNearest, orderSerpentine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.LM = root.LM || {}; root.LM.detect = Object.assign(root.LM.detect || {}, api);
 })(typeof self !== 'undefined' ? self : globalThis);
@@ -812,7 +971,7 @@ h1, h2, p { margin: 0; }
   'use strict';
   const node = (typeof require !== 'undefined' && typeof module !== 'undefined');
   const M = node ? require('./model.js') : root.LM.model;
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
 
   const safe = s => String(s || '').replace(/[^\w\- .]+/g, '_').trim() || 'led_map';
   const cid = s => String(s || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'x';
@@ -1339,12 +1498,13 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     ctx.beginPath(); let pen = false;
     for (let i = 0; i < pts.length; i++) { const p = pts[i]; if (!p) { pen = false; continue; } if (pen) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); pen = true; }
     ctx.strokeStyle = st.color; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5 / c.z; ctx.stroke(); ctx.globalAlpha = 1;
-    const minR = 3 / c.z, active = st.id === S.activeStrip;
+    const minR = 3 / c.z, active = st.id === S.activeStrip, showPins = st.leds.some(l => l.f);
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i]; if (!p) continue; const l = st.leds[i], r = Math.max(rad(l), minR), selected = S.sel.has(l.id);
       ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832);
       if (l.dead) { ctx.fillStyle = 'rgba(20,24,26,0.7)'; ctx.fill(); ctx.strokeStyle = '#8b9590'; ctx.lineWidth = 1.2 / c.z; ctx.stroke(); ctx.beginPath(); ctx.moveTo(p[0] - r * 0.5, p[1] - r * 0.5); ctx.lineTo(p[0] + r * 0.5, p[1] + r * 0.5); ctx.moveTo(p[0] + r * 0.5, p[1] - r * 0.5); ctx.lineTo(p[0] - r * 0.5, p[1] + r * 0.5); ctx.stroke(); }
       else { ctx.fillStyle = ledColor(l, st); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1 / c.z; ctx.stroke(); }
+      if (showPins && !l.f && r * c.z > 4) { ctx.beginPath(); ctx.arc(p[0], p[1], r * 0.38, 0, 6.2832); ctx.fillStyle = l.dead ? '#8b9590' : '#ffffff'; ctx.fill(); }
       if (l.check && !selected) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 2.5 / c.z, 0, 6.2832); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5 / c.z; ctx.setLineDash([3 / c.z, 2 / c.z]); ctx.stroke(); ctx.setLineDash([]); }
       if (selected) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 2 / c.z, 0, 6.2832); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / c.z; ctx.stroke(); }
       if (i === 0) { ctx.beginPath(); ctx.arc(p[0], p[1], r + 5 / c.z, 0, 6.2832); ctx.strokeStyle = st.color; ctx.lineWidth = 2 / c.z; ctx.stroke(); }
@@ -1405,7 +1565,14 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
       updateHint(); draw(); return;
     }
     if (!S.path) {
-      const st = activeStrip(true), last = st.leds[st.leds.length - 1];
+      let st = activeStrip(false);
+      if (!st || (st.done && st.leds.length)) {     // nothing to continue: this click starts a new strip
+        mutate(() => { st = M.newStrip(S.project); S.project.strips.push(st); S.activeStrip = st.id; st.leds.push(M.newLed(s.id, x, y)); });
+        S.path = { strip: st.id, sheet: s.id, legs: [], pitch: pitchWork(s), next: 'row' };
+        updateHint(); renderPathBar(); return;
+      }
+      delete st.done;
+      const last = st.leds[st.leds.length - 1];
       const prev = st.leds[st.leds.length - 2];
       // Continuing a strip: if it ends partway along a row, the next leg is the turn.
       S.path = { strip: st.id, sheet: s.id, legs: [], pitch: pitchWork(s), next: last && prev && !last.dead && !prev.dead && !last.brk ? 'turn' : 'row' };
@@ -1426,7 +1593,8 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
   }
   const pathAnchor = () => { const st = S.path && stripById(S.path.strip); return st ? st.leds[st.leds.length - 1] : null; };
   function makeLegLeds(sheet, leg, lp) {
-    return lp.pts.map((p, k) => M.newLed(sheet.id, p[0], p[1], { dead: leg.kind === 'turn' && k < lp.M - 1, brk: leg.kind === 'turn' && k === lp.M - 1 ? true : undefined, check: (lp.weak || lp.conf < 0.3) && leg.kind === 'row' ? true : undefined }));
+    // f marks an LED whose position was worked out by even spacing. It "floats" between the pinned LEDs either side.
+    return lp.pts.map((p, k) => M.newLed(sheet.id, p[0], p[1], { f: k < lp.M - 1 ? 1 : undefined, dead: leg.kind === 'turn' && k < lp.M - 1, brk: leg.kind === 'turn' && k === lp.M - 1 ? true : undefined, check: (lp.weak || lp.conf < 0.3) && leg.kind === 'row' ? true : undefined }));
   }
   function addLeg(x, y, forceKind) {
     const s = curSheet(), st = stripById(S.path.strip), a = pathAnchor(); if (!a || !s) return;
@@ -1462,12 +1630,19 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     changed(); renderPathBar(); updateHint();
   }
   function cancelPathStart() { S.path = null; S.preview = null; renderPathBar(); updateHint(); draw(); }
-  function finishPath() {
-    if (!S.path) return; const p = S.path; S.path = null; S.preview = null;
-    const st = stripById(p.strip);
-    if (st && p.legs.length && $('optGroupRows').checked && $('optRowsTurns').checked) { regroupStrip(st, false); }
+  /**
+   * Stop drawing. With `done` the strip is marked finished, so the next click in Draw path
+   * starts a new strip instead of adding to this one. Without it the strip is only paused.
+   */
+  function finishPath(done) {
+    const p = S.path, st = p ? stripById(p.strip) : (done ? activeStrip(false) : null);
+    if (!p && !(done && st && st.leds.length && !st.done)) return;
+    S.path = null; S.preview = null;
+    if (st && p && p.legs.length && $('optGroupRows').checked && $('optRowsTurns').checked) { regroupStrip(st, false); }
+    if (done && st && st.leds.length) { st.done = true; toast(`${st.name} is finished with ${st.leds.length} LEDs. Your next click starts a new strip.`); }
     changed(); renderPathBar(); updateHint();
   }
+  function continueStrip(st) { if (!st) return; if (S.path) finishPath(); delete st.done; S.activeStrip = st.id; const last = st.leds[st.leds.length - 1]; if (last && sheetById(last.s) && S.view !== last.s) setView(last.s); setTool('path'); changed(); renderPathBar(); }
   /** Rebuild the automatic groups of one strip from its runs of live pixels. */
   function regroupStrip(st, withUndo) {
     const run = () => {
@@ -1484,7 +1659,9 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     const on = S.tool === 'path' && S.view !== 'layout' && !!S.view; $('pathOpts').hidden = !on; if (!on) return;
     const leg = S.path && S.path.legs[S.path.legs.length - 1], has = !!leg;
     for (const id of ['btnLegMinus', 'btnLegPlus', 'btnLegType', 'btnLegJump', 'btnLegUndo']) $(id).disabled = !has;
-    $('btnPathDone').disabled = !S.path;
+    const act = activeStrip(false), open = act && act.leds.length && !act.done;
+    $('btnPathDone').disabled = !(S.path || open); $('btnPathDone').textContent = act && open ? `Finish ${act.name}` : 'Finish strip';
+    const cont = $('btnPathContinue'), canCont = !S.path && act && act.done && act.leds.length; cont.hidden = !canCont; if (canCont) cont.textContent = `Continue ${act.name}`;
     $('legInfo').textContent = has ? leg.single ? (leg.kind === 'turn' ? 'One dead LED placed' : 'One LED placed') : (leg.kind === 'turn' ? (leg.M === 1 ? 'Jump: no LEDs between' : `Turn: ${Math.max(0, leg.M - 1)} dead`) : `Row: ${leg.M} added`) + (leg.M !== leg.auto ? ` (tool counted ${leg.auto})` : '') : '';
   }
 
@@ -1506,24 +1683,47 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
   function setDead(v) { if (!S.sel.size) return; mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) { e.led.dead = v; delete e.led.check; } } }); }
   function toggleDead() { if (!S.sel.size) return; const anyLive = [...S.sel].some(id => { const e = index.get(id); return e && !e.led.dead; }); setDead(anyLive); }
   function deleteSel() { if (!S.sel.size) return; mutate(() => { for (const st of S.project.strips) st.leds = st.leds.filter(l => !S.sel.has(l.id)); S.sel.clear(); }); }
-  function nudge(dx, dy) { if (!S.sel.size) return; mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) { e.led.x += dx; e.led.y += dy; } } }); }
+  function nudge(dx, dy) {
+    if (!S.sel.size) return;
+    mutate(() => { for (const id of S.sel) { const e = index.get(id); if (e) { e.led.x += dx; e.led.y += dy; delete e.led.f; delete e.led.check; } } if (S.sel.size === 1) { const e = index.get([...S.sel][0]); if (e) reflowAround(e.strip, e.k); } });
+  }
+  /* Pinned and floating LEDs. A pinned LED sits where someone put it: a clicked corner, a detected
+     LED, or one that was dragged. Floating LEDs (f) are spaced evenly between the pins either side. */
+  function pinsAround(strip, k) { let a = k - 1, b = k + 1; while (a > 0 && strip.leds[a].f) a--; while (b < strip.leds.length - 1 && strip.leds[b].f) b++; return [Math.max(0, a), Math.min(strip.leds.length - 1, b)]; }
+  function reflowSpan(strip, a, b) {
+    if (b - a < 2) return; const A = strip.leds[a], B = strip.leds[b]; if (A.s !== B.s) return; const sh = sheetById(A.s); if (!sh) return;
+    const wa = toWork(sh, A.x, A.y), wb = toWork(sh, B.x, B.y);
+    for (let i = a + 1; i < b; i++) { const l = strip.leds[i]; if (!l.f || l.s !== A.s) continue; const t = (i - a) / (b - a), p = toImage(sh, wa[0] + (wb[0] - wa[0]) * t, wa[1] + (wb[1] - wa[1]) * t); l.x = p[0]; l.y = p[1]; }
+  }
+  /** After LED k has been moved by hand: spread the floating LEDs on both sides of it. */
+  function reflowAround(strip, k) { if (k < 0 || k >= strip.leds.length) return; const [a, b] = pinsAround(strip, k); if (k > 0) reflowSpan(strip, a, k); if (k < strip.leds.length - 1) reflowSpan(strip, k, b); }
+  /** Replace LEDs from..to of a strip with n evenly spaced ones. The two ends stay where they are. */
+  function respaceRange(strip, from, to, n) {
+    const old = strip.leds.slice(from, to + 1); n = Math.max(2, Math.round(n || old.length));
+    const a = old[0], b = old[old.length - 1]; if (a.s !== b.s) { toast('That run crosses two photos.'); return null; }
+    const sh = sheetById(a.s), wa = toWork(sh, a.x, a.y), wb = toWork(sh, b.x, b.y), fresh = [];
+    for (let j = 0; j < n; j++) {
+      if (j === 0) { fresh.push(a); continue; } if (j === n - 1) { fresh.push(b); continue; }
+      const src = old[Math.max(1, Math.min(old.length - 2, Math.round(j * (old.length - 1) / (n - 1))))] || old[0], t = j / (n - 1), p = toImage(sh, wa[0] + (wb[0] - wa[0]) * t, wa[1] + (wb[1] - wa[1]) * t);
+      const led = M.newLed(sh.id, p[0], p[1], { f: 1, dead: old.length > 2 ? src.dead : (a.dead && b.dead) });
+      for (const g of S.project.groups) if (g.leds.includes(src.id) && old.length > 2) g.leds.push(led.id); else if (old.length <= 2 && g.leds.includes(a.id) && g.leds.includes(b.id)) g.leds.push(led.id);
+      fresh.push(led);
+    }
+    strip.leds.splice(from, old.length, ...fresh); return fresh;
+  }
   /** Replace the selected run with `count` evenly spaced LEDs between its two ends. */
   function respace(count) {
     const runs = selRuns(); if (runs.length !== 1 || !runs[0].contiguous || runs[0].ks.length < 2) { toast('Select one unbroken run of at least two LEDs first.'); return; }
-    const { strip, from, to } = runs[0], old = strip.leds.slice(from, to + 1), n = Math.max(2, Math.round(count || old.length));
-    const a = old[0], b = old[old.length - 1]; if (a.s !== b.s) { toast('That run crosses two photos.'); return; }
-    const sh = sheetById(a.s), wa = toWork(sh, a.x, a.y), wb = toWork(sh, b.x, b.y);
-    mutate(() => {
-      const fresh = [];
-      for (let j = 0; j < n; j++) {
-        const src = old[Math.round(j * (old.length - 1) / (n - 1))], t = j / (n - 1), p = toImage(sh, wa[0] + (wb[0] - wa[0]) * t, wa[1] + (wb[1] - wa[1]) * t);
-        const keepId = j === 0 ? a.id : j === n - 1 ? b.id : null;
-        const led = M.newLed(sh.id, p[0], p[1], { dead: src.dead, brk: j === 0 ? a.brk : undefined }); if (keepId) led.id = keepId;
-        if (!keepId) for (const g of S.project.groups) if (g.leds.includes(src.id)) g.leds.push(led.id);
-        fresh.push(led);
-      }
-      strip.leds.splice(from, old.length, ...fresh); S.sel = new Set(fresh.map(l => l.id));
-    });
+    const { strip, from, to } = runs[0];
+    mutate(() => { const fresh = respaceRange(strip, from, to, count || (to - from + 1)); if (fresh) S.sel = new Set(fresh.map(l => l.id)); });
+  }
+  /** With one floating LED selected: one more or one fewer LED between the pins either side of it. */
+  function changeSpan(delta) {
+    const e = index.get([...S.sel][0]); if (!e) return;
+    if (!e.led.f) { toast('This LED is pinned. Select an LED between two pinned ones to change how many sit there.'); return; }
+    const [a, b] = pinsAround(e.strip, e.k), n = b - a + 1 + delta; if (n < 2) return;
+    const was = [e.led.x, e.led.y];
+    mutate(() => { const fresh = respaceRange(e.strip, a, b, n); if (!fresh) return; let best = fresh[0], bd = Infinity; for (const l of fresh.slice(1, -1)) { const d = Math.hypot(l.x - was[0], l.y - was[1]); if (d < bd) { bd = d; best = l; } } S.sel = new Set([best.id]); S.lastSel = best.id; });
   }
   function groupFromSel() {
     if (!S.sel.size) return;
@@ -1574,8 +1774,8 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     else if (drag.type === 'sheet') { if (!drag.moved && Math.hypot(sx - drag.sx, sy - drag.sy) > 3) { pushUndo(); drag.moved = true; drag.s.place.moved = true; } if (drag.moved) { drag.s.place.x = drag.px + (sx - drag.sx) / c.z; drag.s.place.y = drag.py + (sy - drag.sy) / c.z; draw(); } }
     else if (drag.type === 'flat') { S.flatEdit.quad[drag.qi] = [wx, wy]; draw(); }
     else if (drag.type === 'move') {
-      if (!drag.moved && Math.hypot(sx - drag.sx, sy - drag.sy) > 3) { pushUndo(); drag.moved = true; drag.orig = [...S.sel].map(id => { const en = index.get(id); return en ? [en.led, en.led.x, en.led.y] : null; }).filter(Boolean); }
-      if (drag.moved) { const dx = wx - drag.wx, dy = wy - drag.wy; for (const [l, x, y] of drag.orig) { l.x = x + dx; l.y = y + dy; delete l.check; } draw(); }
+      if (!drag.moved && Math.hypot(sx - drag.sx, sy - drag.sy) > 3) { pushUndo(); drag.moved = true; drag.orig = [...S.sel].map(id => { const en = index.get(id); return en ? [en.led, en.led.x, en.led.y] : null; }).filter(Boolean); drag.one = S.sel.size === 1 ? index.get([...S.sel][0]) : null; }
+      if (drag.moved) { const dx = wx - drag.wx, dy = wy - drag.wy; for (const [l, x, y] of drag.orig) { l.x = x + dx; l.y = y + dy; delete l.check; delete l.f; } if (drag.one) reflowAround(drag.one.strip, drag.one.k); draw(); }
     } else if (drag.type === 'marquee') {
       S.marquee.x1 = sx; S.marquee.y1 = sy; const s = curSheet(), m = S.marquee, x0 = Math.min(m.x0, m.x1), x1 = Math.max(m.x0, m.x1), y0 = Math.min(m.y0, m.y1), y1 = Math.max(m.y0, m.y1);
       S.sel = new Set(drag.add); for (const st of S.project.strips) for (const l of st.leds) { if (l.s !== s.id) continue; const p = toScreen(l.x, l.y); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) S.sel.add(l.id); }
@@ -1593,7 +1793,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
   canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   canvas.addEventListener('dblclick', e => {
-    if (S.tool === 'path' && S.path) { finishPath(); return; }
+    if (S.tool === 'path' && S.path) { finishPath(true); return; }
     if (S.tool !== 'select' || S.view === 'layout') return; const [sx, sy] = local(e), l = ledAt(sx, sy); if (l) { selectRunAround(l); renderSide(); draw(); }
   });
   canvas.addEventListener('wheel', e => {
@@ -1632,7 +1832,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     if (k === ' ') { S.spaceDown = true; e.preventDefault(); canvas.style.cursor = 'grab'; return; }
     const kl = k.toLowerCase();
     if (S.path || S.calib) {
-      if (k === 'Enter') { finishPath(); return; }
+      if (k === 'Enter') { finishPath(true); return; }
       if (k === 'Escape') { if (S.calib && curSheet() && curSheet().calib) { S.calib = null; updateHint(); draw(); } else if (S.path) finishPath(); else setTool('select'); return; }
       if (k === 'Backspace' || k === 'Delete') { e.preventDefault(); if (S.calib && S.calib.pts.length) { S.calib.pts.pop(); draw(); updateHint(); } else removeLeg(); return; }
       if (k === '[') { const leg = S.path && S.path.legs[S.path.legs.length - 1]; if (leg) regenLeg(leg.M - 1); return; }
@@ -1645,7 +1845,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     else if (k === 'Escape') { if (S.flatEdit) { S.flatEdit = null; renderSide(); } S.sel.clear(); renderSide(); draw(); }
     else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); deleteSel(); }
     else if (kl === 'd') toggleDead(); else if (kl === 'g') groupFromSel();
-    else if (k === '[' || k === ']') { const r = selRuns(); if (r.length === 1 && r[0].contiguous && r[0].ks.length >= 2) respace(r[0].ks.length + (k === ']' ? 1 : -1)); }
+    else if (k === '[' || k === ']') { const r = selRuns(); if (S.sel.size === 1) changeSpan(k === ']' ? 1 : -1); else if (r.length === 1 && r[0].contiguous && r[0].ks.length >= 2) respace(r[0].ks.length + (k === ']' ? 1 : -1)); }
     else if (k.startsWith('Arrow') && S.sel.size && S.view !== 'layout') { e.preventDefault(); const st = (e.shiftKey ? 5 : 1) / cam().z * (e.altKey ? 0.25 : 1); nudge(k === 'ArrowLeft' ? -st : k === 'ArrowRight' ? st : 0, k === 'ArrowUp' ? -st : k === 'ArrowDown' ? st : 0); }
   });
   window.addEventListener('keyup', e => { if (e.key === ' ') { S.spaceDown = false; canvas.style.cursor = ''; } });
@@ -1659,15 +1859,18 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     else if (S.flatEdit) t = 'Drag handles 1 to 4 onto the corners of a flat rectangle, clockwise from its top left. Then enter its size and apply.';
     else if (S.tool === 'path') {
       if (S.calib) t = S.calib.pts.length ? 'Now click the LED right next to it.' : 'First, click one LED so the tool can learn the spacing. Zoom in for accuracy.';
-      else if (!S.path) { const st = activeStrip(false), last = st && st.leds[st.leds.length - 1]; t = last && last.s === s.id ? `Click the next corner to continue ${esc(st.name)} from pixel ${st.leds.length - 1}. To start a separate strip, add one in the Strips panel.` : 'Click the first LED of the strip, where the data enters.'; }
+      else if (!S.path) { const st = activeStrip(false), last = st && st.leds[st.leds.length - 1];
+        t = st && !st.done && last && last.s === s.id ? `Click the next corner to carry on with ${esc(st.name)} from pixel ${st.leds.length - 1}. When the strip is complete, choose Finish ${esc(st.name)}.`
+          : st && st.done && st.leds.length ? `${esc(st.name)} is finished. Click the first LED of the next strip, where its data enters.` : 'Click the first LED of the strip, where the data enters.'; }
       else if (!S.path.legs.length) t = 'Click the last LED of this straight run. The tool counts the LEDs in between.';
-      else if ($('optRowsTurns').checked) t = (S.path.next === 'turn' ? `Click the first LED of the next row. The tool estimates the dead LEDs in the turn: check the count. On a curved turn, ${k('Shift')}-click each LED in it.` : 'Click the last LED of this row.') + ` Wrong count? ${k('[')} ${k(']')}. ${k('Backspace')} steps back, ${k('Enter')} finishes.`;
-      else t = `Click the next corner. ${k('Shift')}-click places one LED exactly. ${k('[')} ${k(']')} fix the count, ${k('Backspace')} steps back, ${k('Enter')} finishes.`;
+      else if ($('optRowsTurns').checked) t = (S.path.next === 'turn' ? `Click the first LED of the next row. The tool estimates the dead LEDs in the turn: check the count. On a curved turn, ${k('Shift')}-click each LED in it.` : 'Click the last LED of this row.') + ` Wrong count? ${k('[')} ${k(']')}. ${k('Backspace')} steps back. ${k('Enter')} ends the strip.`;
+      else t = `Click the next corner. ${k('Shift')}-click places one LED exactly. ${k('[')} ${k(']')} fix the count, ${k('Backspace')} steps back, ${k('Enter')} ends the strip.`;
     } else if (S.tool === 'add') t = 'Click to add an LED to the end of the active strip. Click on the wire between two LEDs to insert one there.';
     else if (S.tool === 'pan') t = 'Drag to pan. Scroll or pinch to zoom.';
     else if (!S.project.strips.some(st => st.leds.length)) t = `Choose ${k('Draw path')} and trace the strip from the first LED.`;
+    else if (S.sel.size === 1) t = `Drag this LED to where it really is: the LEDs between it and the next pinned LED spread out to follow. ${k('[')} ${k(']')} change how many sit between the pins. ${k('D')} dead or live.`;
     else if (S.sel.size) t = `${k('D')} dead or live, ${k('G')} group, ${k('[')} ${k(']')} one fewer or one more in the run, ${k('Delete')} removes, arrows nudge.`;
-    else t = 'Click an LED, drag a box, or double-click to select a whole run. Shift-click selects a range along the wire.';
+    else t = 'Drag any LED to correct its position. Click to select, drag a box, or double-click for a whole run. Shift-click selects a range along the wire.';
     $('hint').innerHTML = t ? `<span>${t}</span>` : '';
   }
   const esc = s => String(s).replace(/[&<>"]/g, ch2 => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch2]));
@@ -1748,6 +1951,10 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
       h('button', { class: 'btn tiny', text: s.calib ? 'Set spacing again' : 'Set spacing', onclick: beginCalib }),
       h('button', { class: 'btn tiny', text: s.flat ? 'Edit flattening' : 'Flatten photo', title: 'Correct for the camera angle using a rectangle of known size', onclick: () => { const m = Math.min(s.w, s.h) * 0.25, cx = s.w / 2, cy = s.h / 2; S.flatEdit = s.flat ? { quad: s.flat.quad.map(p => [p[0], p[1]]), w: s.flat.w, h: s.flat.h } : { quad: [[cx - m, cy - m], [cx + m, cy - m], [cx + m, cy + m], [cx - m, cy + m]], w: 12, h: 12 }; if (S.path) finishPath(); S.tool = 'select'; setTool('select'); renderSide(); draw(); } }),
       h('button', { class: 'btn tiny', text: 'Find lit LEDs', title: 'For photos taken with the LEDs switched on', onclick: () => findLit(s) })));
+    const ls = h('input', { type: 'number', min: 1, max: 16, step: 1, value: s.litStrips || 1, 'aria-label': 'Strips in this photo' }); ls.addEventListener('change', () => { const v = Math.max(1, Math.min(16, parseInt(ls.value, 10) || 1)); s.litStrips = v; ls.value = v; autosaveSoon(); });
+    box.append(h('details', { class: 'tip' }, h('summary', { text: 'Photographing lit LEDs' }),
+      h('p', { class: 'note', text: 'Light the strip in a repeating red, green, blue cycle and the tool reads the wiring order from the photo. In WLED: effect Solid Pattern Tri, colours red, green and blue, Size slider at its lowest, brightness low. Lower the exposure until each LED is a separate dot.' }),
+      h('label', null, 'Separate strips lit in this photo', ls)));
     if (!s.flat) box.append(h('p', { class: 'note', text: 'Shot at an angle? Flatten the photo first so spacing stays even across it.' }));
     box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny danger', text: 'Remove photo', onclick: () => removeSheet(s) })));
     void pw;
@@ -1758,18 +1965,59 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     mutate(() => { for (const st of S.project.strips) st.leds = st.leds.filter(l => l.s !== s.id); S.project.sheets = S.project.sheets.filter(x => x !== s); S.images.delete(s.id); autoLayout(); S.view = S.project.sheets.length ? S.project.sheets[0].id : null; });
     renderTabs(); updateHint();
   }
+  const medianOf = a => { const t = a.slice().sort((x, y) => x - y); return t.length ? t[t.length >> 1] : 0; };
   function findLit(s) {
     const prep = prepFor(s); if (!prep) { toast('This photo has no image data.'); return; }
     const r = D.detectLit(prep);
     if (r.blobs.length < 2) { toast('No lit LEDs found. For unlit strips, use Draw path.'); return; }
     if (r.blobs.length > 6000) { toast(`Found ${r.blobs.length} bright spots, which is too many to be LEDs. Is this photo taken with the LEDs on?`); return; }
+    const here = S.project.strips.reduce((n, st) => n + st.leds.filter(l => l.s === s.id).length, 0);
+    if (here && !confirm(`This photo already has ${here} LEDs mapped. Replace them with the lit LEDs?`)) return;
+    if (S.path) finishPath();
+    const total = r.blobs.length, cyc = r.mode === 'colour' && r.perColour.filter(c => c >= total * 0.15).length === 3;
+    let msg = '';
     mutate(() => {
-      const st = activeStrip(true), start = r.blobs.reduce((bi, b, i) => (b.x + b.y < r.blobs[bi].x + r.blobs[bi].y ? i : bi), 0), order = D.orderNearest(r.blobs, start);
-      const leds = order.map(i => M.newLed(s.id, r.blobs[i].x, r.blobs[i].y)); st.leds.push(...leds);
-      if (!s.calib && leds.length > 1) { const d = []; for (let i = 1; i < leds.length; i++) d.push([Math.hypot(leds[i].x - leds[i - 1].x, leds[i].y - leds[i - 1].y), i]); d.sort((a, b) => a[0] - b[0]); const m = d[d.length >> 1][1]; s.calib = { a: [leds[m - 1].x, leds[m - 1].y], b: [leds[m].x, leds[m].y] }; }
-      S.sel = new Set([leds[0].id]); S.lastSel = leds[0].id;
+      if (here) { for (const st of S.project.strips) st.leds = st.leds.filter(l => l.s !== s.id); S.project.strips = S.project.strips.filter(st => st.leds.length || st.id === S.activeStrip); }
+      const fresh = [];
+      const takeStrip = () => { let st = activeStrip(false); if (!st || st.leds.length || fresh.includes(st)) { st = M.newStrip(S.project); S.project.strips.push(st); } S.activeStrip = st.id; fresh.push(st); return st; };
+      let flagged = 0;
+      if (cyc) {
+        const ch = D.chainByColour(r.blobs, { strips: Math.max(1, Math.round(+s.litStrips || 1)) });
+        for (const chain of ch.chains) {
+          const st = takeStrip(); let flagNext = false;
+          for (const e of chain) {
+            if (typeof e === 'number') { st.leds.push(M.newLed(s.id, r.blobs[e].x, r.blobs[e].y, flagNext ? { check: true } : null)); if (flagNext) flagged++; flagNext = false; }
+            else if (e.gap) { st.leds.push(M.newLed(s.id, e.gap[0], e.gap[1], { check: true, f: 1 })); flagged++; }
+            else if (e.join) flagNext = true;
+          }
+          st.done = true;
+        }
+        msg = `Found ${total} lit LEDs and read the wiring order from the colour cycle: ${ch.chains.map(c => c.filter(e => !e.join).length).join(' + ')} LEDs in ${ch.chains.length} strip${ch.chains.length > 1 ? 's' : ''}.` + (ch.leftovers.length ? ` ${ch.leftovers.length} stray spot${ch.leftovers.length > 1 ? 's' : ''} left out.` : '') + (flagged ? ` ${flagged} place${flagged > 1 ? 's' : ''} ringed for you to check.` : '');
+      } else {
+        const st = takeStrip(), start = r.blobs.reduce((bi, bb, i) => (bb.x + bb.y < r.blobs[bi].x + r.blobs[bi].y ? i : bi), 0), order = D.orderNearest(r.blobs, start);
+        st.leds.push(...order.map(i => M.newLed(s.id, r.blobs[i].x, r.blobs[i].y)));
+        msg = `Found ${total} lit LEDs and ordered them by nearest neighbour. Select the true first pixel and choose a reorder button. For automatic ordering, light the strip in a red, green, blue cycle.`;
+      }
+      const first = fresh[0];
+      if (first && first.leds.length > 2) {
+        const d = []; for (let i = 1; i < first.leds.length; i++) d.push(Math.hypot(first.leds[i].x - first.leds[i - 1].x, first.leds[i].y - first.leds[i - 1].y));
+        const med = medianOf(d), m = d.findIndex(v => v === med) + 1; if (m > 0) s.calib = { a: [first.leds[m - 1].x, first.leds[m - 1].y], b: [first.leds[m].x, first.leds[m].y] };
+        autoLayout();
+      }
+      if (cyc) { let rows = 0, dead = 0; for (const st of fresh) { const res = applyRows(st, 5); rows += res.rows; dead += res.dead; } if (rows) msg += ` First guess at rows and turns: ${rows} rows, ${dead} LEDs in turns marked dead.`; }
+      if (first && first.leds.length) { S.sel = new Set([first.leds[0].id]); S.lastSel = first.leds[0].id; }
     });
-    toast(`Found ${r.blobs.length} lit LEDs and ordered them by nearest neighbour. Select the true first pixel to reorder from there.`);
+    S.colorBy = 'group'; $('colorBy').value = S.project.groups.length ? 'group' : 'strip'; S.colorBy = $('colorBy').value; setTool('select'); draw(); toast(msg);
+  }
+  /** Mark turns dead and rows as groups on one strip, from its shape. Returns counts. Call inside mutate. */
+  function applyRows(st, minLen) {
+    const res = M.resolve(S.project), si = S.project.strips.indexOf(st), mine = res.leds.filter(l => l.strip === si);
+    if (mine.length < 3) return { rows: 0, dead: 0 };
+    const pts = mine.map(l => [l.x, l.y]), d = []; for (let i = 1; i < pts.length; i++) d.push(Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const rt = D.rowsAndTurns(pts, medianOf(d) || 1, minLen);
+    st.leds.forEach((l, i) => { l.dead = rt[i].dead; if (rt[i].brk) l.brk = true; else delete l.brk; });
+    regroupStrip(st, false);
+    return { rows: S.project.groups.filter(g => g.auto === st.id).length, dead: rt.filter(x => x.dead).length };
   }
   function renderStrips() {
     const list = $('stripList'); list.textContent = ''; const r = M.resolve(S.project);
@@ -1782,7 +2030,8 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
       const col = h('input', { type: 'color', value: st.color, class: 'dot', title: 'Colour', style: 'background:' + st.color + ';-webkit-appearance:none;appearance:none;overflow:hidden' }); col.addEventListener('change', () => mutate(() => { st.color = col.value; }));
       const item = h('div', { class: 'item' + (on ? ' on' : ''), onclick: e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; S.activeStrip = st.id; renderSide(); draw(); } },
         col, name, h('span', { class: 'meta' }, 'GPIO', pin),
-        h('div', { class: 'strip-more' }, h('span', { text: `${info.count} LEDs, ${info.count - info.live} dead, starts at ${info.start}` }), h('span', { style: 'flex:1' }),
+        h('div', { class: 'strip-more' }, h('span', { text: `${info.count} LEDs, ${info.count - info.live} dead, starts at ${info.start}` + (st.done ? ', finished' : '') }), h('span', { style: 'flex:1' }),
+          st.done && st.leds.length ? h('button', { class: 'btn tiny', title: 'Add more LEDs to the end of this strip', text: 'Continue', onclick: () => continueStrip(st) }) : null,
           h('button', { class: 'icon', title: 'Move up', text: '↑', onclick: () => moveItem(S.project.strips, i, -1) }), h('button', { class: 'icon', title: 'Move down', text: '↓', onclick: () => moveItem(S.project.strips, i, 1) }),
           h('button', { class: 'icon', title: 'Reverse the data direction', text: '⇄', onclick: () => mutate(() => { st.leds.reverse(); }) }),
           h('button', { class: 'icon', title: 'Delete strip', text: '✕', onclick: () => { if (st.leds.length && !confirm(`Delete "${st.name}" and its ${st.leds.length} LEDs?`)) return; mutate(() => { S.project.strips.splice(i, 1); if (S.activeStrip === st.id) S.activeStrip = null; }); } })));
@@ -1808,6 +2057,8 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     if (gs.length) box.append(sel);
     if (n === 1 && one) {
       const led = one.strip.leds[one.from];
+      if (led.f) { const [pa, pb] = pinsAround(one.strip, one.from); box.append(h('label', null, `Between the pinned LEDs either side (pixels ${pa} and ${pb}): ${pb - pa - 1} LEDs`, h('span', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: '−1', onclick: () => changeSpan(-1) }), h('button', { class: 'btn tiny', text: '+1', onclick: () => changeSpan(1) })))); }
+      else if (one.strip.leds.some(l => l.f)) box.append(h('p', { class: 'note' }, 'Pinned, shown with a white centre. Drag it and the LEDs up to the next pin follow. ', one.from > 0 && one.from < one.strip.leds.length - 1 ? h('button', { class: 'btn tiny', text: 'Unpin', title: 'Let the tool space this LED evenly between its neighbours again', onclick: () => mutate(() => { led.f = 1; const [pa, pb] = pinsAround(one.strip, one.from); reflowSpan(one.strip, pa, pb); }) }) : null));
       box.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!led.brk, onchange: e => mutate(() => { if (e.target.checked) led.brk = true; else delete led.brk; }) }), 'A new group starts at this pixel'));
       box.append(h('div', { class: 'btnrow' }, h('button', { class: 'btn tiny', text: 'Reorder from here: nearest', title: 'Make this the first pixel and order the rest by nearest neighbour', onclick: () => reorderFrom(led, 'near') }), h('button', { class: 'btn tiny', text: 'Reorder: serpentine rows', onclick: () => reorderFrom(led, 'serp') })));
     }
@@ -1973,6 +2224,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     $('fileImages').addEventListener('change', e => { addPhotos([...e.target.files]); e.target.value = ''; });
     $('fileProject').addEventListener('change', e => { if (e.target.files[0]) openProjectFile(e.target.files[0]); e.target.value = ''; });
     $('btnAddStrip').onclick = () => { if (S.path) finishPath(); mutate(() => { const st = M.newStrip(S.project); S.project.strips.push(st); S.activeStrip = st.id; }); if (S.view && S.view !== 'layout') setTool('path'); };
+    $('btnFindRows').onclick = () => { const st = activeStrip(false); if (!st || st.leds.length < 3) { toast('Select a strip with LEDs first.'); return; } let res; mutate(() => { res = applyRows(st, 5); }); S.colorBy = 'group'; $('colorBy').value = 'group'; draw(); toast(res.rows ? `${st.name}: ${res.rows} rows, ${res.dead} LEDs in turns marked dead. This is a guess from the shape, so check the short runs.` : `${st.name} has no straight run of 5 or more LEDs, so nothing was changed.`); };
     $('btnGroupRuns').onclick = () => { const st = activeStrip(false); if (!st || !st.leds.length) { toast('Select a strip with LEDs first.'); return; } regroupStrip(st, true); S.colorBy = 'group'; $('colorBy').value = 'group'; draw(); toast(`Grouped each run of live pixels on ${st.name}.`); };
     $('btnClearGroups').onclick = () => { if (S.project.groups.length && confirm(`Remove all ${S.project.groups.length} groups? The LEDs stay.`)) mutate(() => { S.project.groups = []; }); };
     $('photoDim').addEventListener('input', e => { S.photoDim = e.target.value / 100; draw(); });
@@ -1980,7 +2232,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
     $('optRowsTurns').addEventListener('change', updateHint);
     $('btnLegMinus').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M - 1); }; $('btnLegPlus').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M + 1); };
     $('btnLegJump').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(1, 'turn'); };
-    $('btnLegType').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M, l.kind === 'row' ? 'turn' : 'row'); }; $('btnLegUndo').onclick = removeLeg; $('btnPathDone').onclick = finishPath;
+    $('btnLegType').onclick = () => { const l = S.path && S.path.legs[S.path.legs.length - 1]; if (l) regenLeg(l.M, l.kind === 'row' ? 'turn' : 'row'); }; $('btnLegUndo').onclick = removeLeg; $('btnPathDone').onclick = () => finishPath(true); $('btnPathContinue').onclick = () => continueStrip(activeStrip(false));
     $('btnExport').onclick = () => { if (S.path) finishPath(); $('dlgExport').showModal(); renderExport(); };
     document.querySelectorAll('#exportTarget button').forEach(b => b.addEventListener('click', () => { S.exportTarget = b.dataset.t; S.exportFile = 0; renderExport(); }));
     $('btnCopyFile').onclick = async () => { const f = exportResult && exportResult.files[S.exportFile]; if (f && f.text) { try { await navigator.clipboard.writeText(f.text); toast(`Copied ${f.name}`); } catch (_) { toast('Copy was blocked by the browser. Use Download instead.'); } } };

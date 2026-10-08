@@ -3,7 +3,7 @@
   'use strict';
   const node = (typeof require !== 'undefined' && typeof module !== 'undefined');
   const M = node ? require('./model.js') : root.LM.model;
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
 
   const safe = s => String(s || '').replace(/[^\w\- .]+/g, '_').trim() || 'led_map';
   const cid = s => String(s || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'x';
