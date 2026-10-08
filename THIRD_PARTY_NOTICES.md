@@ -1,6 +1,6 @@
 # Third party notices
 
-LED Mapper bundles no third party code. It uses only what the browser provides.
+EasyLEDMap bundles no third party code. It uses only what the browser provides.
 
 The files it exports are meant to be used with other projects, each under its own licence:
 
@@ -13,4 +13,4 @@ The files it exports are meant to be used with other projects, each under its ow
 - **TouchDesigner** is a commercial product of Derivative. The CSV and PNG exports are plain
   data files.
 
-The generated files themselves carry no licence terms from LED Mapper: use them as you like.
+The generated files themselves carry no licence terms from EasyLEDMap: use them as you like.

@@ -1,4 +1,4 @@
-/* LED Mapper: minimal zip reader and writer. Writes stored (uncompressed) entries, which is fine
+/* EasyLEDMap: minimal zip reader and writer. Writes stored (uncompressed) entries, which is fine
    because the bulk of a project is JPEG data. Reads stored and deflated entries. */
 (function (root) {
   'use strict';

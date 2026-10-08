@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LED Mapper</title>
+<title>EasyLEDMap</title>
 <meta name="description" content="Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.">
 <meta name="theme-color" content="#1d2327">
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyMjI4MmIiLz48cGF0aCBkPSJNMTggMjBoMjh2MjRIMTgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVkNjk2MyIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTgiIGN5PSIyMCIgcj0iNyIgZmlsbD0iI2ZmNGZhMyIvPjxjaXJjbGUgY3g9IjQ2IiBjeT0iMjAiIHI9IjciIGZpbGw9IiMxOWMzZTYiLz48Y2lyY2xlIGN4PSI0NiIgY3k9IjQ0IiByPSI3IiBmaWxsPSIjZmZiMDAwIi8+PGNpcmNsZSBjeD0iMTgiIGN5PSI0NCIgcj0iNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOWFhNmEwIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4K">
 <style>
-/* LED Mapper. System fonts only so the tool works with no network. */
+/* EasyLEDMap. System fonts only so the tool works with no network. */
 :root {
   --paper: #eef0ec; --panel: #f8f9f6; --ink: #18211d; --muted: #5d6963; --rule: #ced4cc;
   --accent: #0e6a5b; --accent-ink: #ffffff; --accent-soft: #d9ebe6; --stage: #22282b; --stage-ink: #e8ece9;
@@ -176,7 +176,7 @@ h1, h2, p { margin: 0; }
 </head>
 <body>
 <header class="bar">
-  <div class="brand" aria-label="LED Mapper"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>LED Mapper</span></div>
+  <div class="brand" aria-label="EasyLEDMap"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>EasyLEDMap</span></div>
   <input id="projectName" class="project-name" aria-label="Project name" spellcheck="false" value="Untitled map">
   <span id="saveState" class="save-state" aria-live="polite"></span>
   <div class="bar-actions">
@@ -209,7 +209,7 @@ h1, h2, p { margin: 0; }
       <div class="empty" id="empty">
         <div class="empty-card">
           <h1>Map your LEDs from a photo</h1>
-          <p>Add a photo of the strips, then trace the path the data takes. LED Mapper counts and places the pixels along it and writes the map for WLED, FastLED or TouchDesigner.</p>
+          <p>Add a photo of the strips, then trace the path the data takes. EasyLEDMap counts and places the pixels along it and writes the map for WLED, FastLED or TouchDesigner.</p>
           <div class="empty-actions">
             <button class="btn primary big" id="btnAddFirst">Add photos</button>
             <button class="btn big" id="btnOpen2">Open a project</button>
@@ -309,7 +309,7 @@ h1, h2, p { margin: 0; }
 <input type="file" id="fileProject" accept=".ledmap,.zip,.json,application/zip,application/json" hidden>
 
 <script>
-/* LED Mapper: geometry helpers (homography, similarity). */
+/* EasyLEDMap: geometry helpers (homography, similarity). */
 (function (root) {
   'use strict';
   /** Solve A x = b for small dense systems (Gaussian elimination with pivoting). */
@@ -374,7 +374,7 @@ h1, h2, p { margin: 0; }
 })(typeof self !== 'undefined' ? self : globalThis);
 </script>
 <script>
-/* LED Mapper: project model. Pure functions, no DOM. */
+/* EasyLEDMap: project model. Pure functions, no DOM. */
 (function (root) {
   'use strict';
   const G = (typeof require !== 'undefined' && typeof module !== 'undefined') ? require('./geom.js') : root.LM.geom;
@@ -398,7 +398,7 @@ h1, h2, p { margin: 0; }
 
   function newProject() {
     return {
-      format: 'led-mapper', version: 1, name: 'Untitled map',
+      format: 'easyledmap', version: 1, name: 'Untitled map',
       setup: { chipset: 'WS2815', voltage: 12, maPerPixel: 12, colorOrder: 'GRB', ledsPerMeter: 60, psuAmps: 0 },
       sheets: [], strips: [], groups: [],
       exports: {
@@ -502,8 +502,10 @@ h1, h2, p { margin: 0; }
   }
 
   function validate(p) {
-    if (!p || p.format !== 'led-mapper') throw new Error('This file is not an LED Mapper project.');
-    if (p.version > 1) throw new Error('This project was saved by a newer version of LED Mapper.');
+    // 'led-mapper' was the format name before the tool was renamed. Those files still open.
+    if (!p || (p.format !== 'easyledmap' && p.format !== 'led-mapper')) throw new Error('This file is not an EasyLEDMap project.');
+    p.format = 'easyledmap';
+    if (p.version > 1) throw new Error('This project was saved by a newer version of EasyLEDMap.');
     const d = newProject();
     p.setup = Object.assign(d.setup, p.setup || {});
     p.sheets = p.sheets || []; p.strips = p.strips || []; p.groups = p.groups || [];
@@ -519,7 +521,7 @@ h1, h2, p { margin: 0; }
 })(typeof self !== 'undefined' ? self : globalThis);
 </script>
 <script>
-/* LED Mapper: image analysis. Plain JS, no dependencies. Runs in the browser and in Node. */
+/* EasyLEDMap: image analysis. Plain JS, no dependencies. Runs in the browser and in Node. */
 (function (root) {
   'use strict';
 
@@ -741,7 +743,7 @@ h1, h2, p { margin: 0; }
 })(typeof self !== 'undefined' ? self : globalThis);
 </script>
 <script>
-/* LED Mapper: minimal zip reader and writer. Writes stored (uncompressed) entries, which is fine
+/* EasyLEDMap: minimal zip reader and writer. Writes stored (uncompressed) entries, which is fine
    because the bulk of a project is JPEG data. Reads stored and deflated entries. */
 (function (root) {
   'use strict';
@@ -805,7 +807,7 @@ h1, h2, p { margin: 0; }
 })(typeof self !== 'undefined' ? self : globalThis);
 </script>
 <script>
-/* LED Mapper: exporters. Pure functions: project in, list of files out. */
+/* EasyLEDMap: exporters. Pure functions: project in, list of files out. */
 (function (root) {
   'use strict';
   const node = (typeof require !== 'undefined' && typeof module !== 'undefined');
@@ -821,7 +823,7 @@ h1, h2, p { margin: 0; }
     return `const ${type} ${name}[${o.size}]${o.progmem ? ' PROGMEM' : ''} = {\n${lines.join(',\n')}\n};\n`;
   }
   const fmt = (v, type) => type === 'float' ? (Number.isInteger(v) ? v.toFixed(1) : String(v)) + 'f' : String(v);
-  function stamp(project) { return `Generated by LED Mapper ${VERSION} from "${project.name}"`; }
+  function stamp(project) { return `Generated by EasyLEDMap ${VERSION} from "${project.name}"`; }
 
   /** Median spacing between neighbouring live LEDs on the same strip, in world units. */
   function medianPitch(leds) {
@@ -1122,7 +1124,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
 })(typeof self !== 'undefined' ? self : globalThis);
 </script>
 <script>
-/* LED Mapper: application. */
+/* EasyLEDMap: application. */
 (function () {
   'use strict';
   const { model: M, detect: D, geom: G, zip: Z, exporters: X } = window.LM;
@@ -1854,7 +1856,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
       const bytes = await projectBytes(), name = X.safe(S.project.name) + '.ledmap';
       if (window.showSaveFilePicker && window.isSecureContext) {
         try {
-          if (!S.fileHandle) S.fileHandle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'LED Mapper project', accept: { 'application/zip': ['.ledmap'] } }] });
+          if (!S.fileHandle) S.fileHandle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'EasyLEDMap project', accept: { 'application/zip': ['.ledmap'] } }] });
           const w = await S.fileHandle.createWritable(); await w.write(bytes); await w.close(); toast(`Saved ${S.fileHandle.name}`); markSaved(S.fileHandle.name); return;
         } catch (err) { if (err && err.name === 'AbortError') return; S.fileHandle = null; }
       }
@@ -1865,7 +1867,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
   async function openProjectFile(file) {
     try {
       const buf = new Uint8Array(await file.arrayBuffer()); let project, entries = [];
-      if (buf[0] === 0x50 && buf[1] === 0x4b) { entries = await Z.read(buf); const pj = entries.find(e => e.name === 'project.json'); if (!pj) throw new Error('This zip has no project.json inside, so it is not an LED Mapper project.'); project = JSON.parse(new TextDecoder().decode(pj.data)); }
+      if (buf[0] === 0x50 && buf[1] === 0x4b) { entries = await Z.read(buf); const pj = entries.find(e => e.name === 'project.json'); if (!pj) throw new Error('This zip has no project.json inside, so it is not an EasyLEDMap project.'); project = JSON.parse(new TextDecoder().decode(pj.data)); }
       else project = JSON.parse(new TextDecoder().decode(buf));
       await loadProject(M.validate(project), async s => { const e = entries.find(x => x.name === s.file); return e ? new Blob([e.data], { type: 'image/jpeg' }) : null; });
       S.fileHandle = null; toast(`Opened ${file.name}`); $('saveState').textContent = `Opened ${file.name}`;
@@ -1886,7 +1888,7 @@ Universe and channel columns assume ${ch} channels per pixel and ${perU} pixels 
 
   /* --------------------------------------------------------------- autosave */
   let saveTimer = 0, db = null;
-  function idb() { return new Promise((res, rej) => { if (db) return res(db); const r = indexedDB.open('led-mapper', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { db = r.result; res(db); }; r.onerror = () => rej(r.error); }); }
+  function idb() { return new Promise((res, rej) => { if (db) return res(db); const r = indexedDB.open('led-mapper', 1); /* name predates the rename; kept so earlier autosaves still load */ r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { db = r.result; res(db); }; r.onerror = () => rej(r.error); }); }
   function autosaveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(autosave, 1200); }
   async function autosave() {
     try {

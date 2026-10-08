@@ -1,4 +1,4 @@
-/* LED Mapper: application. */
+/* EasyLEDMap: application. */
 (function () {
   'use strict';
   const { model: M, detect: D, geom: G, zip: Z, exporters: X } = window.LM;
@@ -730,7 +730,7 @@
       const bytes = await projectBytes(), name = X.safe(S.project.name) + '.ledmap';
       if (window.showSaveFilePicker && window.isSecureContext) {
         try {
-          if (!S.fileHandle) S.fileHandle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'LED Mapper project', accept: { 'application/zip': ['.ledmap'] } }] });
+          if (!S.fileHandle) S.fileHandle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'EasyLEDMap project', accept: { 'application/zip': ['.ledmap'] } }] });
           const w = await S.fileHandle.createWritable(); await w.write(bytes); await w.close(); toast(`Saved ${S.fileHandle.name}`); markSaved(S.fileHandle.name); return;
         } catch (err) { if (err && err.name === 'AbortError') return; S.fileHandle = null; }
       }
@@ -741,7 +741,7 @@
   async function openProjectFile(file) {
     try {
       const buf = new Uint8Array(await file.arrayBuffer()); let project, entries = [];
-      if (buf[0] === 0x50 && buf[1] === 0x4b) { entries = await Z.read(buf); const pj = entries.find(e => e.name === 'project.json'); if (!pj) throw new Error('This zip has no project.json inside, so it is not an LED Mapper project.'); project = JSON.parse(new TextDecoder().decode(pj.data)); }
+      if (buf[0] === 0x50 && buf[1] === 0x4b) { entries = await Z.read(buf); const pj = entries.find(e => e.name === 'project.json'); if (!pj) throw new Error('This zip has no project.json inside, so it is not an EasyLEDMap project.'); project = JSON.parse(new TextDecoder().decode(pj.data)); }
       else project = JSON.parse(new TextDecoder().decode(buf));
       await loadProject(M.validate(project), async s => { const e = entries.find(x => x.name === s.file); return e ? new Blob([e.data], { type: 'image/jpeg' }) : null; });
       S.fileHandle = null; toast(`Opened ${file.name}`); $('saveState').textContent = `Opened ${file.name}`;
@@ -762,7 +762,7 @@
 
   /* --------------------------------------------------------------- autosave */
   let saveTimer = 0, db = null;
-  function idb() { return new Promise((res, rej) => { if (db) return res(db); const r = indexedDB.open('led-mapper', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { db = r.result; res(db); }; r.onerror = () => rej(r.error); }); }
+  function idb() { return new Promise((res, rej) => { if (db) return res(db); const r = indexedDB.open('led-mapper', 1); /* name predates the rename; kept so earlier autosaves still load */ r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { db = r.result; res(db); }; r.onerror = () => rej(r.error); }); }
   function autosaveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(autosave, 1200); }
   async function autosave() {
     try {

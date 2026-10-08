@@ -1,4 +1,4 @@
-/* LED Mapper: geometry helpers (homography, similarity). */
+/* EasyLEDMap: geometry helpers (homography, similarity). */
 (function (root) {
   'use strict';
   /** Solve A x = b for small dense systems (Gaussian elimination with pivoting). */

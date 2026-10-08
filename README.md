@@ -1,4 +1,4 @@
-# LED Mapper
+# EasyLEDMap
 
 Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.
 
@@ -13,7 +13,7 @@ those. See [What it does not do yet](#what-it-does-not-do-yet).
 
 - **Online:** open the GitHub Pages site for this repository. After the first visit it also
   works with no network, and Chrome or Edge can install it as an app.
-- **From a file:** download `dist/led-mapper.html` and double-click it. It is the whole tool in
+- **From a file:** download `dist/easyledmap.html` and double-click it. It is the whole tool in
   one file, so it is the easy choice for a job site with no internet.
 - **From source:** `python3 -m http.server 8765` in this folder, then open
   http://localhost:8765.
@@ -129,7 +129,7 @@ No build step and no dependencies. The app is plain scripts in `js/`.
 npm test           # counting, exporters, and a compile check of generated code (needs g++)
 npm run serve      # in one terminal
 npm run test:ui    # in another: browser tests, needs Playwright
-npm run build      # writes dist/led-mapper.html
+npm run build      # writes dist/easyledmap.html
 ```
 
 To publish on GitHub Pages: Settings, Pages, deploy from the `main` branch, root folder.

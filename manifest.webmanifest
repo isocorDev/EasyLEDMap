@@ -1,6 +1,6 @@
 {
-  "name": "LED Mapper",
-  "short_name": "LED Mapper",
+  "name": "EasyLEDMap",
+  "short_name": "EasyLEDMap",
   "description": "Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.",
   "start_url": "./index.html",
   "scope": "./",

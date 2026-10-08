@@ -1,4 +1,4 @@
-/* LED Mapper: image analysis. Plain JS, no dependencies. Runs in the browser and in Node. */
+/* EasyLEDMap: image analysis. Plain JS, no dependencies. Runs in the browser and in Node. */
 (function (root) {
   'use strict';
 

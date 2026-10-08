@@ -1,4 +1,4 @@
-/* LED Mapper. System fonts only so the tool works with no network. */
+/* EasyLEDMap. System fonts only so the tool works with no network. */
 :root {
   --paper: #eef0ec; --panel: #f8f9f6; --ink: #18211d; --muted: #5d6963; --rule: #ced4cc;
   --accent: #0e6a5b; --accent-ink: #ffffff; --accent-soft: #d9ebe6; --stage: #22282b; --stage-ink: #e8ece9;

@@ -61,4 +61,6 @@ const idatAt = Buffer.from(png).indexOf('IDAT'), len = Buffer.from(png).readUInt
 const raw = zlib.inflateSync(Buffer.from(png).subarray(idatAt + 4, idatAt + 4 + len));
 assert.strictEqual(raw.length, 1 + 14 * 6); assert.strictEqual(raw.readUInt16BE(1 + 5 * 6 + 4), 0, 'dead pixel blue = 0');
 assert.strictEqual(X.crc32(Buffer.from('123456789')), 0xCBF43926);
+// projects saved under the old format name still validate, and are upgraded
+{ const old = JSON.parse(JSON.stringify(sample())); old.format = 'led-mapper'; assert.strictEqual(M.validate(old).format, 'easyledmap'); assert.throws(() => M.validate({ format: 'something-else' }), /not an EasyLEDMap project/); }
 console.log('exporters: all checks passed');

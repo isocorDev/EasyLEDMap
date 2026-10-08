@@ -1,4 +1,4 @@
-/* LED Mapper: project model. Pure functions, no DOM. */
+/* EasyLEDMap: project model. Pure functions, no DOM. */
 (function (root) {
   'use strict';
   const G = (typeof require !== 'undefined' && typeof module !== 'undefined') ? require('./geom.js') : root.LM.geom;
@@ -22,7 +22,7 @@
 
   function newProject() {
     return {
-      format: 'led-mapper', version: 1, name: 'Untitled map',
+      format: 'easyledmap', version: 1, name: 'Untitled map',
       setup: { chipset: 'WS2815', voltage: 12, maPerPixel: 12, colorOrder: 'GRB', ledsPerMeter: 60, psuAmps: 0 },
       sheets: [], strips: [], groups: [],
       exports: {
@@ -126,8 +126,10 @@
   }
 
   function validate(p) {
-    if (!p || p.format !== 'led-mapper') throw new Error('This file is not an LED Mapper project.');
-    if (p.version > 1) throw new Error('This project was saved by a newer version of LED Mapper.');
+    // 'led-mapper' was the format name before the tool was renamed. Those files still open.
+    if (!p || (p.format !== 'easyledmap' && p.format !== 'led-mapper')) throw new Error('This file is not an EasyLEDMap project.');
+    p.format = 'easyledmap';
+    if (p.version > 1) throw new Error('This project was saved by a newer version of EasyLEDMap.');
     const d = newProject();
     p.setup = Object.assign(d.setup, p.setup || {});
     p.sheets = p.sheets || []; p.strips = p.strips || []; p.groups = p.groups || [];

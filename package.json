@@ -1,5 +1,5 @@
 {
-  "name": "led-mapper",
+  "name": "easyledmap",
   "version": "0.1.0",
   "description": "Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.",
   "license": "MIT",
