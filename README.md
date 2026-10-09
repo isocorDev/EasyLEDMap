@@ -2,6 +2,8 @@
 
 Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.
 
+**Use it now: https://isocordev.github.io/EasyLEDMap/**
+
 You add a photo, trace the path the data takes, and the tool counts and places the LEDs along
 it. Then you mark dead pixels, name groups, and export. Everything runs in the browser. Photos
 are never uploaded.
@@ -12,7 +14,7 @@ hand. See [What it does not do yet](#what-it-does-not-do-yet).
 
 ## Run it
 
-- **Online:** open the GitHub Pages site for this repository. After the first visit it also
+- **Online:** open https://isocordev.github.io/EasyLEDMap/. After the first visit it also
   works with no network, and Chrome or Edge can install it as an app.
 - **From a file:** download `dist/easyledmap.html` and double-click it. It is the whole tool in
   one file, so it is the easy choice for a job site with no internet.
