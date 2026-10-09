@@ -162,3 +162,7 @@ h1, h2, p { margin: 0; }
   .export-opts { border-right: 0; border-bottom: 1px solid var(--rule); overflow: visible; }
   .empty-card h1 { font-size: 22px; }
 }
+
+.tip { font-size: 12.5px; }
+.tip > summary { cursor: pointer; color: var(--accent); padding: 2px 0; }
+.tip .note { margin: 6px 0; }

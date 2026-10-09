@@ -1,6 +1,6 @@
 {
   "name": "easyledmap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn a photo of addressable LEDs into a pixel map for WLED, FastLED and TouchDesigner.",
   "license": "MIT",
   "private": true,
@@ -8,6 +8,6 @@
     "serve": "python3 -m http.server 8765",
     "build": "node tools/build.js",
     "test": "node test/detect.test.js && node test/exporters.test.js && sh test/compile/run.sh",
-    "test:ui": "node test/ui_full.js && node test/ui_smoke.js"
+    "test:ui": "node test/ui_full.js && node test/ui_lit.js && node test/ui_smoke.js"
   }
 }

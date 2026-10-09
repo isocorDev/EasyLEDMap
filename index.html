@@ -62,7 +62,8 @@
         <button class="btn tiny" id="btnLegType" title="Switch the last leg between row and turn (T)">Row / turn</button>
         <button class="btn tiny" id="btnLegJump" title="The last click was a wire jump: no LEDs between the two points (J)">Wire jump</button>
         <button class="btn tiny" id="btnLegUndo" title="Remove the last leg (Backspace)">Remove leg</button>
-        <button class="btn tiny primary" id="btnPathDone" title="Finish (Enter)">Finish</button>
+        <button class="btn tiny primary" id="btnPathDone" title="This strip is complete. The next click starts a new strip (Enter)">Finish strip</button>
+        <button class="btn tiny" id="btnPathContinue" title="Add more LEDs to the end of this strip" hidden>Continue strip</button>
       </div>
       <div class="viewopts" id="viewOpts">
         <label title="Dim the photo so the map reads clearly">Photo <input type="range" id="photoDim" min="0" max="100" value="100"></label>
@@ -111,6 +112,7 @@
       <summary>Groups <span class="count" id="groupCount"></span></summary>
       <div id="groupList" class="list groups"></div>
       <div class="sec-actions">
+        <button class="btn tiny" id="btnFindRows" title="Guess rows and turns on the active strip from its shape: turns go dead, each row becomes a group">Find rows and turns</button>
         <button class="btn tiny" id="btnGroupRuns" title="Make one group from every unbroken run of live pixels on the active strip">Group each run</button>
         <button class="btn tiny" id="btnClearGroups">Clear groups</button>
       </div>
